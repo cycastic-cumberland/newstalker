@@ -2,7 +2,7 @@ using System.Globalization;
 using ExtendedComponents;
 using Newtonsoft.Json;
 
-namespace RecentChangeETL;
+namespace WikiStalkerExtendedComponents;
 
 public class RawWikipediaRecentChange
 {

@@ -1,6 +1,6 @@
 using ExtendedComponents;
 
-namespace RecentChangeETL;
+namespace ETLnR;
 
 public abstract class AbstractHarvester : AbstractDaemon
 {

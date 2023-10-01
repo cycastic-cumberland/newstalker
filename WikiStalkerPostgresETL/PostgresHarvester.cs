@@ -1,10 +1,11 @@
+using ETLnR;
 using ExtendedComponents;
 using Newtonsoft.Json;
 using Npgsql;
 using PostgresDriver;
-using RecentChangeETL;
+using WikiStalkerExtendedComponents;
 
-namespace PostgresETL;
+namespace WikiStalkerPostgresETL;
 
 public class PostgresHarvesterSettings
 {

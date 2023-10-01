@@ -1,8 +1,8 @@
+using ETLnR;
 using ExtendedComponents;
+using ExtendedPostgresDriver;
 using Microsoft.AspNetCore.Mvc;
-using WikiStalkerCore;
-using PostgresETL;
-using RecentChangeETL;
+using WikiStalkerPostgresETL;
 
 namespace WikiStalkerWebAPI.Controllers;
 
@@ -10,6 +10,8 @@ namespace WikiStalkerWebAPI.Controllers;
 [Route("[controller]")]
 public class EtlController : ControllerBase
 {
+    private static readonly DaemonManager Manager = new();
+    
     [HttpGet("test")]
     public IActionResult HelloWorld()
     {
@@ -21,7 +23,7 @@ public class EtlController : ControllerBase
     {
         var result = await Task.Run(() =>
         {
-            return WikiStalkerEngine.Manager.Manage("etl", () => new PostgresHarvester(settings,
+            return Manager.Manage("etl", () => new PostgresHarvester(settings,
                 new LoggingServerDelegate[]
                 {
                     new PostgresLogger(settings.ConnectionSettings, "stalker_logs"),
@@ -35,7 +37,7 @@ public class EtlController : ControllerBase
     [HttpGet("run_gc")]
     public IActionResult RunGc()
     {
-        var etl = WikiStalkerEngine.Manager.Get("etl") as AbstractHarvester;
+        var etl = Manager.Get("etl") as AbstractHarvester;
         if (etl == null) return NotFound();
         etl.RunGarbageCollection();
         return Ok("OK");
@@ -44,7 +46,7 @@ public class EtlController : ControllerBase
     [HttpGet("stop_etl")]
     public IActionResult Stop()
     {
-        var result = WikiStalkerEngine.Manager.CloseDaemon("etl");
+        var result = Manager.CloseDaemon("etl");
 
         return result ? Ok("OK") : NotFound("Daemon not found");
     }

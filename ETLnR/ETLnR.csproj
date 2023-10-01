@@ -6,11 +6,9 @@
         <Nullable>enable</Nullable>
     </PropertyGroup>
 
-
     <ItemGroup>
       <ProjectReference Include="..\ExtendedComponents\ExtendedComponents.csproj" />
     </ItemGroup>
-
 
     <ItemGroup>
       <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />

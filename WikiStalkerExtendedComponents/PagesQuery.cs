@@ -1,7 +1,6 @@
 using Newtonsoft.Json;
-using RecentChangeETL;
 
-namespace TopicRanks;
+namespace WikiStalkerExtendedComponents;
 
 public class SinglePage
 {

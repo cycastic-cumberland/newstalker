@@ -1,6 +1,6 @@
 using Newtonsoft.Json;
 
-namespace RecentChangeETL;
+namespace WikiStalkerExtendedComponents;
 
 public class RecentChanges
 {

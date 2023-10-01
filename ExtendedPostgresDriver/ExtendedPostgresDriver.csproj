@@ -8,7 +8,10 @@
 
     <ItemGroup>
       <ProjectReference Include="..\PostgresDriver\PostgresDriver.csproj" />
-      <ProjectReference Include="..\RecentChangeETL\RecentChangeETL.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     </ItemGroup>
 
 </Project>

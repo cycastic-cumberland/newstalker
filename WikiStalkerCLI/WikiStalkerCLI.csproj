@@ -15,7 +15,9 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\WikiStalkerCore\WikiStalkerCore.csproj" />
+      <ProjectReference Include="..\ExtendedPostgresDriver\ExtendedPostgresDriver.csproj" />
+      <ProjectReference Include="..\WikiStalkerPostgresETL\WikiStalkerPostgresETL.csproj" />
+      <ProjectReference Include="..\WikiStalkerPostgresTopicRanks\WikiStalkerPostgresTopicRanks.csproj" />
     </ItemGroup>
 
 </Project>

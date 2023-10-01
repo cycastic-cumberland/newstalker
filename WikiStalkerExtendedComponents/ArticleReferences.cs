@@ -1,6 +1,6 @@
 using Newtonsoft.Json;
 
-namespace TopicRanks;
+namespace WikiStalkerExtendedComponents;
 
 public class ArticleLink
 {

@@ -1,11 +1,11 @@
 using System.Text;
+using ETLnR;
 using ExtendedComponents;
 using Newtonsoft.Json;
 using PostgresDriver;
-using RecentChangeETL;
-using TopicRanks;
+using WikiStalkerExtendedComponents;
 
-namespace PostgresTopicRanks;
+namespace WikiStalkerPostgresTopicRanks;
 
 
 public class PostgresTopicRankerSettings

@@ -1,6 +1,6 @@
 using ExtendedComponents;
 
-namespace TopicRanks;
+namespace ETLnR;
 
 public struct TopicRanksSettings
 {

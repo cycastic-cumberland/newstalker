@@ -2,10 +2,10 @@ using System.Reflection;
 using ExtendedComponents;
 using Newtonsoft.Json;
 using PostgresDriver;
-using PostgresETL;
-using PostgresTopicRanks;
+using WikiStalkerPostgresETL;
+using WikiStalkerPostgresTopicRanks;
 
-namespace WikiStalkerCore;
+namespace WikiStalkerCLI;
 
 public static class WikiStalkerEngine
 {
@@ -19,8 +19,7 @@ public static class WikiStalkerEngine
     private static Dictionary<string, string> _cmdArgs = null!;
 
     public static DaemonManager Manager => _manager!;
-    public static object? Lifetime;
-    
+
     private static T GetSettings<T>(string configPath)
     {
         string content = File.ReadAllText(configPath);
@@ -48,7 +47,6 @@ public static class WikiStalkerEngine
     
     public static void Setup(string[] args, object lifetime)
     {
-        Lifetime = lifetime;
         CmdArgumentsParse(args);
         _manager = new();
     }

@@ -7,8 +7,12 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\PostgresETL\PostgresETL.csproj" />
-      <ProjectReference Include="..\PostgresTopicRanks\PostgresTopicRanks.csproj" />
+      <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    </ItemGroup>
+
+
+    <ItemGroup>
+      <ProjectReference Include="..\ExtendedComponents\ExtendedComponents.csproj" />
     </ItemGroup>
 
 </Project>

@@ -1,6 +1,6 @@
 using Newtonsoft.Json;
 
-namespace TopicRanks;
+namespace ETLnR;
 
 public readonly struct TopicsMap
 {

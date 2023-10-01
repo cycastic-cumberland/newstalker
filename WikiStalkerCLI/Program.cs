@@ -1,8 +1,8 @@
 ﻿using System.Diagnostics;
 using ExtendedComponents;
-using WikiStalkerCore;
-using PostgresETL;
-using PostgresTopicRanks;
+using ExtendedPostgresDriver;
+using WikiStalkerPostgresETL;
+using WikiStalkerPostgresTopicRanks;
 
 // Recent changes: https://en.wikipedia.org/w/api.php?action=query&list=recentchanges&rcnamespace=0&rclimit=10&format=json
 // More on recent changes: https://en.wikipedia.org/w/api.php?action=help&modules=query%2Brecentchanges

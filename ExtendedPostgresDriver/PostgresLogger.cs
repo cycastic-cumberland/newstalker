@@ -2,7 +2,7 @@ using ExtendedComponents;
 using Newtonsoft.Json;
 using PostgresDriver;
 
-namespace PostgresETL;
+namespace ExtendedPostgresDriver;
 
 public class PostgresLogger : LoggingServerDelegate
 {

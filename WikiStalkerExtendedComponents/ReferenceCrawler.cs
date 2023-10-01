@@ -1,10 +1,9 @@
 using System.Collections;
 using ExtendedComponents;
 using Newtonsoft.Json;
-using RecentChangeETL;
 using ThreadPool = ExtendedComponents.ThreadPool;
 
-namespace TopicRanks;
+namespace WikiStalkerExtendedComponents;
 
 // public readonly struct MonoDirectionalReference<T>
 // {

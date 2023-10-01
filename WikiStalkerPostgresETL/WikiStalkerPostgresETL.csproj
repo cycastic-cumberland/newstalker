@@ -7,8 +7,9 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\ExtendedComponents\ExtendedComponents.csproj" />
-      <ProjectReference Include="..\RecentChangeETL\RecentChangeETL.csproj" />
+      <ProjectReference Include="..\ETLnR\ETLnR.csproj" />
+      <ProjectReference Include="..\PostgresDriver\PostgresDriver.csproj" />
+      <ProjectReference Include="..\WikiStalkerExtendedComponents\WikiStalkerExtendedComponents.csproj" />
     </ItemGroup>
 
 </Project>
