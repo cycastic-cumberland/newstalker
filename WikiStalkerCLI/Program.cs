@@ -15,7 +15,7 @@ using PostgresTopicRanks;
 // Page plain text (by pageids): https://en.wikipedia.org/w/api.php?action=query&pageids=8387&prop=extracts&format=json&explaintext=true
 // Page plain text (by titles): https://en.wikipedia.org/w/api.php?action=query&titles=Draught%20beer&prop=extracts&format=json&explaintext=true
 
-namespace WikiStalker;
+namespace WikiStalkerCLI;
 
 public static class MainClass
 {

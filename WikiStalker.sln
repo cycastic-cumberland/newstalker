@@ -1,6 +1,6 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WikiStalker", "WikiStalker\WikiStalker.csproj", "{C1628A97-7C71-4C67-97CC-EC3934F70B6B}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WikiStalkerCLI", "WikiStalkerCLI\WikiStalkerCLI.csproj", "{C1628A97-7C71-4C67-97CC-EC3934F70B6B}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ExtendedComponents", "ExtendedComponents\ExtendedComponents.csproj", "{72A6F82F-5111-4553-9C51-90EBA24255D6}"
 EndProject
