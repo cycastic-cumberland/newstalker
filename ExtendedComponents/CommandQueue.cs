@@ -88,6 +88,8 @@ public class CommandQueue : IDisposable
     {
         lock (_conditionalLock)
         {
+            if (_serverState != ServerState.Operating)
+                throw new TaskCanceledException();
             QueuedTask queued = new(action);
             _taskQueue.Enqueue(queued);
             Monitor.Pulse(_conditionalLock);

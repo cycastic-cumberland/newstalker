@@ -8,11 +8,11 @@ namespace PostgresETL;
 
 public class PostgresHarvesterSettings
 {
-    public PostgresConnectionSettings ConnectionSettings = null!;
-    public string WikipediaApiKey = "";
-    public float RecordTimeToLiveHr;
-    public float HarvestIntervalHr;
-    public float GarbageCollectionIntervalHr;
+    public PostgresConnectionSettings ConnectionSettings { get; set; } = null!;
+    public string WikipediaApiKey { get; set; } = "";
+    public float RecordTimeToLiveHr { get; set; }
+    public float HarvestIntervalHr { get; set; }
+    public float GarbageCollectionIntervalHr { get; set; }
 }
 
 public class PostgresHarvester : AbstractHarvester
@@ -74,8 +74,8 @@ public class PostgresHarvester : AbstractHarvester
                 _logger.EnrollDelegate(logger);
         }
 
-        GetLastEpochFromDb().Wait();
-        RunGarbageCollection();
+        // Use this instead of the public one
+        RunGarbageCollectionAsync().Wait();
         _logger.Write(_header, "PostgresHarvester online", LogSegment.LogSegmentType.Message);
     }
 

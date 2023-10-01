@@ -13,14 +13,14 @@ public abstract class ObjectPool<T> : IDisposable
     public virtual void Dispose() {}
 }
 
-public class SynchronousObjectPool<T> : ObjectPool<T>
+public class AsynchronousObjectPool<T> : ObjectPool<T>
 {
-    public class SynchronousObjectPoolInstance : IObjectPoolInstance
+    public class AsynchronousObjectPoolInstance : IObjectPoolInstance
     {
-        private readonly SynchronousObjectPool<T> _parent;
+        private readonly AsynchronousObjectPool<T> _parent;
         private readonly T _instance;
 
-        public SynchronousObjectPoolInstance(SynchronousObjectPool<T> parent, T instance)
+        public AsynchronousObjectPoolInstance(AsynchronousObjectPool<T> parent, T instance)
         {
             _parent = parent;
             _instance = instance;
@@ -38,7 +38,7 @@ public class SynchronousObjectPool<T> : ObjectPool<T>
     private readonly CommandQueue _commandQueue = new();
     private readonly Queue<T> _objectQueue = new();
 
-    public SynchronousObjectPool(Func<T> spawner)
+    public AsynchronousObjectPool(Func<T> spawner)
     {
         _spawner = spawner;
     }
@@ -54,11 +54,11 @@ public class SynchronousObjectPool<T> : ObjectPool<T>
         _objectQueue.Clear();
     }
 
-    public override SynchronousObjectPoolInstance Borrow()
+    public override AsynchronousObjectPoolInstance Borrow()
     {
         T? ret = default;
         _commandQueue.SyncTask(() => { ret = _objectQueue.Count == 0 ? _spawner() : _objectQueue.Dequeue(); });
-        return new SynchronousObjectPoolInstance(this, ret!);
+        return new AsynchronousObjectPoolInstance(this, ret!);
     }
 
     protected override void Return(T obj)
@@ -70,22 +70,22 @@ public class SynchronousObjectPool<T> : ObjectPool<T>
     }
 }
 
-public class AsynchronousObjectPool<T> : ObjectPool<T>
+public class SynchronousObjectPool<T> : ObjectPool<T>
 {
     private readonly Queue<T> _objectQueue = new();
     private readonly Func<T> _spawner;
 
-    public AsynchronousObjectPool(Func<T> spawner)
+    public SynchronousObjectPool(Func<T> spawner)
     {
         _spawner = spawner;
     }
     
-    public class AsynchronousObjectPoolInstance : IObjectPoolInstance
+    public class SynchronousObjectPoolInstance : IObjectPoolInstance
     {
-        private readonly AsynchronousObjectPool<T> _parent;
+        private readonly SynchronousObjectPool<T> _parent;
         private readonly T _instance;
         
-        public AsynchronousObjectPoolInstance(AsynchronousObjectPool<T> parent, T instance)
+        public SynchronousObjectPoolInstance(SynchronousObjectPool<T> parent, T instance)
         {
             _parent = parent;
             _instance = instance;
@@ -112,12 +112,12 @@ public class AsynchronousObjectPool<T> : ObjectPool<T>
         }
     }
 
-    public override AsynchronousObjectPoolInstance Borrow()
+    public override SynchronousObjectPoolInstance Borrow()
     {
         lock (this)
         {
             T ret = _objectQueue.Count == 0 ? _spawner() : _objectQueue.Dequeue();
-            return new AsynchronousObjectPoolInstance(this, ret);   
+            return new SynchronousObjectPoolInstance(this, ret);   
         }
     }
 

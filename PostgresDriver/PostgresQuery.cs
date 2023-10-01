@@ -8,7 +8,7 @@ public class PostgresQueryFactory : IDisposable
 
     public PostgresQueryFactory(PostgresConnectionSettings conn)
     {
-        _objectPool = new SynchronousObjectPool<PostgresQuery>(() => new(conn));
+        _objectPool = new AsynchronousObjectPool<PostgresQuery>(() => new(conn));
     }
 
     public ObjectPool<PostgresQuery>.IObjectPoolInstance NewQueryInstance()

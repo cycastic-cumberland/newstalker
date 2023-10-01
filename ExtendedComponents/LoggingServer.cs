@@ -67,7 +67,14 @@ public class LoggingServer : IDisposable
             var log = new LogSegment(header, message, type, metadata);
             foreach (var instance in _delegates)
             {
-                instance.Write(log);
+                try
+                {
+                    instance.Write(log);
+                }
+                catch (Exception)
+                {
+                    // Ignored
+                }
             }
         });
     }

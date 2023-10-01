@@ -11,7 +11,15 @@ public class PostgresLogger : LoggingServerDelegate
 
     public PostgresLogger(PostgresConnectionSettings settings, string tableName)
     {
-        _provider = new(settings);
+        _provider = new();
+        try
+        {
+            _provider.Connect(settings).Wait();
+        }
+        catch (Exception)
+        {
+            // Ignored
+        }
         _tableName = tableName;
     }
 

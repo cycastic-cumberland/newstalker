@@ -1,8 +1,6 @@
-﻿using System.Reflection;
-using System.Text;
+﻿using System.Diagnostics;
 using ExtendedComponents;
-using Newtonsoft.Json;
-using PostgresDriver;
+using WikiStalkerCore;
 using PostgresETL;
 using PostgresTopicRanks;
 
@@ -19,130 +17,56 @@ using PostgresTopicRanks;
 
 namespace WikiStalker;
 
-internal class CmdArgumentParser
-{
-    private readonly Dictionary<string, string> _cmdArgs = new();
-    private readonly string[] _arguments;
-    private StringBuilder? _combinedString;
-    private string _lastKey = "";
-
-    public CmdArgumentParser(string[] args)
-    {
-        _arguments = args;
-    }
-
-    private void ParseString(string argument)
-    {
-        if (string.IsNullOrWhiteSpace(argument)) return;
-
-        if (argument.StartsWith("--"))
-        {
-            _lastKey = argument[2..];
-            return;
-        }
-            
-        if (argument.StartsWith("\""))
-        {
-            if (_combinedString != null)
-            {
-                var nextString = argument[1..];
-                ParseString(" \"");
-                ParseString(nextString);
-            }
-            else
-            {
-                _combinedString = new();
-                _combinedString.Append(argument[1..]);
-            }
-            return;
-        }
-
-        if (argument.EndsWith("\""))
-        {
-            if (_combinedString == null)
-            {
-                throw new Exception("No string to close");
-            }
-
-            var success = _cmdArgs.TryAdd(_lastKey, _combinedString.ToString()[..^1]);
-            if (!success)
-                throw new Exception($"Repeating command line argument: {_lastKey}");
-            _combinedString = null!;
-        }
-        if (_combinedString != null)
-        {
-            _combinedString.Append(argument);
-            return;
-        }
-
-        {
-            var success = _cmdArgs.TryAdd(_lastKey, argument);
-            if (!success)
-                throw new Exception($"Repeating command line argument: {_lastKey}");
-        }
-    }
-    
-    public Dictionary<string, string> Parse()
-    {
-        foreach (var argument in _arguments)
-        {
-            ParseString(argument);
-        }
-
-        if (_combinedString != null)
-            throw new Exception("Unescaped string at the end of command line arguments");
-        return _cmdArgs;
-    }
-}
-
 public static class MainClass
 {
-    private const string PgConnCfg = "pg_config.json";
-    private const string PgEtlCfg = "etl_config.json";
-    private const string PgRankerCfg = "ranker_config.json";
-
-    private static Dictionary<string, string> CmdArgs = null!;
     private static bool _isCanceled;
-    private static string _executablePath = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!;
-
-    private static T GetSettings<T>(string configPath)
-    {
-        string content = File.ReadAllText(configPath);
-        return JsonConvert.DeserializeObject<T>(content) ?? throw new JsonException();
-    }
-
-    private static PostgresConnectionSettings GetPgConnectionSettings()
-        => GetSettings<PostgresConnectionSettings>(CmdArgs["pg-connection-settings"]);
-
-    private static PostgresHarvesterSettings GetPgEtlSettings()
-        => GetSettings<PostgresHarvesterSettings>(CmdArgs["etl-settings"]);
-    
-    private static PostgresTopicRankerSettings GetPgRankerSettings()
-        => GetSettings<PostgresTopicRankerSettings>(CmdArgs["ranker-settings"]);
-
-    private static void CmdArgumentsParse(string[] args)
-    {
-        CmdArgs = new CmdArgumentParser(args).Parse();
-        CmdArgs.TryAdd("pg-connection-settings", Path.Join(_executablePath, PgConnCfg));
-        CmdArgs.TryAdd("etl-settings", Path.Join(_executablePath, PgEtlCfg));
-        CmdArgs.TryAdd("ranker-settings", Path.Join(_executablePath, PgRankerCfg));
-    }
-    
     public static void Main(string[] args)
     {
-        CmdArgumentsParse(args);
+        int nProcessId = Process.GetCurrentProcess().Id;
+        Console.WriteLine($"WikiStalker's process ID: {nProcessId}");
+        WikiStalkerEngine.Setup(args, null!);
         // Enroll configs
-        var connSettings = GetPgConnectionSettings();
-        var etlSettings = GetPgEtlSettings();
-        var rankerSettings = GetPgRankerSettings();
+        var connSettings = WikiStalkerEngine.GetPgConnectionSettings();
+        var etlSettings = WikiStalkerEngine.GetPgEtlSettings();
+        var rankerSettings = WikiStalkerEngine.GetPgRankerSettings();
         
-        var daemonManager = new DaemonManager();
-        var pgLogger = new PostgresLogger(connSettings, "stalker_logs");
-        var stdLogger = new StdLoggingServerDelegate();
-        daemonManager.Manage("etl", new PostgresHarvester(etlSettings,
-            new LoggingServerDelegate[]{ pgLogger, stdLogger }));
-        daemonManager.Manage("ranker", new PostgresTopicRanker(rankerSettings,
-            new LoggingServerDelegate[] { pgLogger, stdLogger }));
+        int serviceEnabled = 0;
+        if (bool.Parse(WikiStalkerEngine.GetSettings("etl-enabled")))
+        {
+            Console.WriteLine("Enabling ETL");
+            Task.Run(() =>
+            {
+                return WikiStalkerEngine.Manager.Manage("etl", () => new PostgresHarvester(etlSettings,
+                    new LoggingServerDelegate[]
+                    {
+                        new PostgresLogger(connSettings, "stalker_logs"),
+                        new StdLoggingServerDelegate()
+                    }));
+            });
+            serviceEnabled++;
+        }
+
+        if (bool.Parse(WikiStalkerEngine.GetSettings("ranker-enabled")))
+        {
+            Console.WriteLine("Enabling Ranker");
+            Task.Run(() =>
+            {
+                WikiStalkerEngine.Manager.Manage("ranker", () => new PostgresTopicRanker(rankerSettings,
+                    new LoggingServerDelegate[]
+                    {
+                        new PostgresLogger(connSettings, "stalker_logs"),
+                        new StdLoggingServerDelegate()
+                    }));
+            });
+            serviceEnabled++;
+        }
+
+        if (serviceEnabled == 0)
+        {
+            Console.Error.WriteLine("No service enabled, exiting...");
+            Environment.Exit(0);
+        }
+        Console.WriteLine($"{serviceEnabled} service(s) have been enabled.");
         Console.CancelKeyPress += delegate(object? _, ConsoleCancelEventArgs arg)
         {
             _isCanceled = true;
@@ -153,5 +77,6 @@ public static class MainClass
             if (_isCanceled) break;
             Thread.Sleep(100);
         }
+        Environment.Exit(0);
     }
 }
