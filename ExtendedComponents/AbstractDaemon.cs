@@ -11,8 +11,9 @@ public abstract class AbstractDaemon : IDisposable, IDaemon
     {
         _loopInterval = (int)(loopInterval <= 1000 ? loopInterval : 100);
         _iterationThread = new Thread(ServerLoop);
-        _iterationThread.Start();
     }
+
+    protected void StartIterator() => _iterationThread.Start();
     
     public virtual void Dispose()
     {

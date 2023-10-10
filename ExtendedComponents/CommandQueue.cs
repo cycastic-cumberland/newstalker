@@ -8,34 +8,58 @@ public class CommandQueue : IDisposable
         Cancelled,
         Flushed
     }
-    private class QueuedTask
+    private abstract class AbstractQueuedClass
     {
-        public readonly TaskCompletionSource<bool> Source;
-        public readonly Action TaskAction;
-        
-        public QueuedTask(Action action)
+        public readonly TaskCompletionSource<bool> Source = new();
+        public abstract Task InvokeAsync();
+        public async Task Wait()
         {
-            TaskAction = action;
-            Source = new();
+            await Source.Task;
         }
+    }
+    private class QueuedActionTask : AbstractQueuedClass
+    {
+        private readonly Action _taskAction;
+        
+        public QueuedActionTask(Action action)
+        {
+            _taskAction = action;
+        }
+
+        public override Task InvokeAsync()
+        {
+            _taskAction();
+            return Task.CompletedTask;
+        }
+    }
+    private class QueuedAsyncTask : AbstractQueuedClass
+    {
+        private readonly Func<Task> _taskAction;
+        
+        public QueuedAsyncTask(Func<Task> action)
+        {
+            _taskAction = action;
+        }
+
+        public override async Task InvokeAsync() => await _taskAction();
     }
 
     private ServerState _serverState = ServerState.Operating;
-    private readonly Thread _server;
-    private readonly Queue<QueuedTask> _taskQueue = new();
+    private readonly Queue<AbstractQueuedClass> _taskQueue = new();
     private readonly object _conditionalLock = new();
+    private readonly Thread _serverTask;
 
     public CommandQueue()
     {
-        _server = new Thread(Start);
-        _server.Start();
+        _serverTask = new Thread(Start);
+        _serverTask.Start();
     }
 
-    private static void Resolve(QueuedTask task)
+    private static async Task Resolve(AbstractQueuedClass task)
     {
         try
         {
-            task.TaskAction.Invoke();
+            await task.InvokeAsync();
             task.Source.SetResult(true);
         }
         catch (Exception ex)
@@ -48,7 +72,7 @@ public class CommandQueue : IDisposable
     {
         while (_serverState == ServerState.Operating)
         {
-            QueuedTask task;
+            AbstractQueuedClass task;
             lock (_conditionalLock)
             {
                 while (_taskQueue.Count == 0 && _serverState == ServerState.Operating)
@@ -69,7 +93,7 @@ public class CommandQueue : IDisposable
                     {
                         foreach (var t in _taskQueue)
                         {
-                            Resolve(t);
+                            Resolve(t).Wait();
                         }
                         _taskQueue.Clear();
 
@@ -80,7 +104,8 @@ public class CommandQueue : IDisposable
                         break;
                 }
             }
-            Resolve(task);
+
+            Resolve(task).Wait();
         }
     }
 
@@ -90,7 +115,19 @@ public class CommandQueue : IDisposable
         {
             if (_serverState != ServerState.Operating)
                 throw new TaskCanceledException();
-            QueuedTask queued = new(action);
+            QueuedActionTask queued = new(action);
+            _taskQueue.Enqueue(queued);
+            Monitor.Pulse(_conditionalLock);
+            return queued.Source.Task;
+        }
+    }
+    public Task DispatchTask(Func<Task> action)
+    {
+        lock (_conditionalLock)
+        {
+            if (_serverState != ServerState.Operating)
+                throw new TaskCanceledException();
+            QueuedAsyncTask queued = new(action);
             _taskQueue.Enqueue(queued);
             Monitor.Pulse(_conditionalLock);
             return queued.Source.Task;
@@ -98,6 +135,11 @@ public class CommandQueue : IDisposable
     }
 
     public void SyncTask(Action action)
+    {
+        DispatchTask(action).Wait();
+    }
+    
+    public void SyncTask(Func<Task> action)
     {
         DispatchTask(action).Wait();
     }
@@ -114,11 +156,11 @@ public class CommandQueue : IDisposable
     public void Flush()
     {
         SetState(ServerState.Flushed);
-        _server.Join();
+        _serverTask.Join();
     }
     public void Dispose()
     {
         SetState(ServerState.Cancelled);
-        _server.Join();
+        _serverTask.Join();
     }
 }

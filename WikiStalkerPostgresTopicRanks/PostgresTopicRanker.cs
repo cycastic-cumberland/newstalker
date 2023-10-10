@@ -49,7 +49,7 @@ public class PostgresTopicRanker : AbstractTopicRanker
     private readonly string _header;
     private string ThreadedHeader => $"{_header}:{Environment.CurrentManagedThreadId}";
     private long _lastRankInterval;
-    private long Now => DateTimeOffset.Now.ToUnixTimeMilliseconds();
+    private long Now => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
     private int GetHash() => GetHashCode();
 
     private async Task GetLastEpochFromDb()
@@ -88,6 +88,7 @@ public class PostgresTopicRanker : AbstractTopicRanker
         _referenceCrawler = new(settings.WorkerCount, settings.CrawlMaxDepth, settings.WikipediaApiKey, _logger);
 
         GetLastEpochFromDb().Wait();
+        StartIterator();
         _logger.Write(_header, "PostgresTopicRanker online", LogSegment.LogSegmentType.Message);
     }
 

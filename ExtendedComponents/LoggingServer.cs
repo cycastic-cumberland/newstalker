@@ -16,7 +16,7 @@ public class LogSegment
     public LogSegment(){}
     public LogSegment(string header, string message, LogSegmentType logSegmentType, object? metadata = null)
     {
-        Timestamp = DateTimeOffset.Now.ToUnixTimeMilliseconds();
+        Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         Header = header;
         Message = message;
         LogType = logSegmentType;
@@ -35,7 +35,7 @@ public class StdLoggingServerDelegate : LoggingServerDelegate
     public override void Write(LogSegment log)
     {
         var msg =
-            $"[{DateTimeOffset.FromUnixTimeMilliseconds(log.Timestamp):yyyy-MM-dd HH:mm:ss}] {log.Header}: {log.Message}";
+            $"[{DateTimeOffset.FromUnixTimeMilliseconds(log.Timestamp).ToLocalTime():yyyy-MM-dd HH:mm:ss}] {log.Header}: {log.Message}";
         if (log.LogType == LogSegment.LogSegmentType.Exception)
             Console.Error.WriteLine(msg);
         else
@@ -48,6 +48,13 @@ public class LoggingServer : IDisposable
     private readonly LinkedList<LoggingServerDelegate> _delegates = new();
     private readonly CommandQueue _queue = new();
     
+    public LoggingServer() {}
+
+    public LoggingServer(IEnumerable<LoggingServerDelegate> loggers)
+    {
+        EnrollDelegates(loggers);
+    }
+    
     public void Dispose()
     {
         _queue.Dispose();
@@ -59,6 +66,13 @@ public class LoggingServer : IDisposable
     public void EnrollDelegate(LoggingServerDelegate instance)
     {
         _queue.SyncTask(() => _delegates.AddLast(instance));
+    }
+    public void EnrollDelegates(IEnumerable<LoggingServerDelegate> loggers)
+    {
+        foreach (var logger in loggers)
+        {
+            EnrollDelegate(logger);
+        }
     }
     public void Write(string header, string message, LogSegment.LogSegmentType type, object? metadata)
     {

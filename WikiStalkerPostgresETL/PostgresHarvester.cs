@@ -34,7 +34,7 @@ public class PostgresHarvester : AbstractHarvester
     private readonly string _header;
     private string ThreadedHeader => $"{_header}:{Environment.CurrentManagedThreadId}";
     
-    private long Now => DateTimeOffset.Now.ToUnixTimeMilliseconds();
+    private long Now => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
     
     private int GetHash() => GetHashCode();
     
@@ -76,7 +76,9 @@ public class PostgresHarvester : AbstractHarvester
         }
 
         // Use this instead of the public one
+        GetLastEpochFromDb().Wait();
         RunGarbageCollectionAsync().Wait();
+        StartIterator();
         _logger.Write(_header, "PostgresHarvester online", LogSegment.LogSegmentType.Message);
     }
 

@@ -18,6 +18,18 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WikiStalkerExtendedComponen
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ETLnR", "ETLnR\ETLnR.csproj", "{3986BD78-507A-4E83-A5EE-C4DF26193E39}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NewstalkerExtendedComponents", "NewstalkerExtendedComponents\NewstalkerExtendedComponents.csproj", "{5D23CAC6-FA3A-47D5-ADC6-F30F9E47CE45}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NewstalkerPostgresETL", "NewstalkerPostgresETL\NewstalkerPostgresETL.csproj", "{D75BC4C7-DA1E-4254-AAEF-F6AC245AEEB6}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Renci.SshNet", "SSH.NET\src\Renci.SshNet\Renci.SshNet.csproj", "{7911EC40-6813-47CE-A180-19E7C6C85A44}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NewstalkerCLI", "NewstalkerCLI\NewstalkerCLI.csproj", "{321BB8C3-CA8F-4EBB-9767-6442A7685EEB}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NewstalkerPostgresGrader", "NewstalkerPostgresGrader\NewstalkerPostgresGrader.csproj", "{3AA2F52F-26B8-4FF6-BEC2-F8585313FFF8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NewstalkerCore", "NewstalkerCore\NewstalkerCore.csproj", "{7B5A400B-CAC8-498A-8F59-6A4B3892CEC9}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -60,5 +72,29 @@ Global
 		{3986BD78-507A-4E83-A5EE-C4DF26193E39}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{3986BD78-507A-4E83-A5EE-C4DF26193E39}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{3986BD78-507A-4E83-A5EE-C4DF26193E39}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5D23CAC6-FA3A-47D5-ADC6-F30F9E47CE45}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5D23CAC6-FA3A-47D5-ADC6-F30F9E47CE45}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5D23CAC6-FA3A-47D5-ADC6-F30F9E47CE45}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5D23CAC6-FA3A-47D5-ADC6-F30F9E47CE45}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D75BC4C7-DA1E-4254-AAEF-F6AC245AEEB6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D75BC4C7-DA1E-4254-AAEF-F6AC245AEEB6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D75BC4C7-DA1E-4254-AAEF-F6AC245AEEB6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D75BC4C7-DA1E-4254-AAEF-F6AC245AEEB6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7911EC40-6813-47CE-A180-19E7C6C85A44}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7911EC40-6813-47CE-A180-19E7C6C85A44}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7911EC40-6813-47CE-A180-19E7C6C85A44}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7911EC40-6813-47CE-A180-19E7C6C85A44}.Release|Any CPU.Build.0 = Release|Any CPU
+		{321BB8C3-CA8F-4EBB-9767-6442A7685EEB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{321BB8C3-CA8F-4EBB-9767-6442A7685EEB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{321BB8C3-CA8F-4EBB-9767-6442A7685EEB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{321BB8C3-CA8F-4EBB-9767-6442A7685EEB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3AA2F52F-26B8-4FF6-BEC2-F8585313FFF8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3AA2F52F-26B8-4FF6-BEC2-F8585313FFF8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3AA2F52F-26B8-4FF6-BEC2-F8585313FFF8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3AA2F52F-26B8-4FF6-BEC2-F8585313FFF8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7B5A400B-CAC8-498A-8F59-6A4B3892CEC9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7B5A400B-CAC8-498A-8F59-6A4B3892CEC9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7B5A400B-CAC8-498A-8F59-6A4B3892CEC9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7B5A400B-CAC8-498A-8F59-6A4B3892CEC9}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

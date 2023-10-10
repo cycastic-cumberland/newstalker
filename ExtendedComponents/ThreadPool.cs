@@ -2,24 +2,43 @@ namespace ExtendedComponents;
 
 public class ThreadPool : IDisposable
 {
-    private class PooledTask
+    private abstract class AbstractPooledClass
     {
-        public readonly TaskCompletionSource<bool> Source;
-        public readonly Action TaskAction;
-        
-        public PooledTask(Action action)
-        {
-            TaskAction = action;
-            Source = new();
-        }
-
+        public readonly TaskCompletionSource<bool> Source = new();
+        public abstract Task InvokeAsync();
         public async Task Wait()
         {
             await Source.Task;
         }
     }
-    private readonly Dictionary<ulong, Thread> _threads = new();
-    private readonly Queue<PooledTask> _taskQueue = new();
+    private class PooledActionTask : AbstractPooledClass
+    {
+        private readonly Action _taskAction;
+        
+        public PooledActionTask(Action action)
+        {
+            _taskAction = action;
+        }
+
+        public override Task InvokeAsync()
+        {
+            _taskAction();
+            return Task.CompletedTask;
+        }
+    }
+    private class PooledAsyncTask : AbstractPooledClass
+    {
+        private readonly Func<Task> _taskAction;
+        
+        public PooledAsyncTask(Func<Task> action)
+        {
+            _taskAction = action;
+        }
+
+        public override async Task InvokeAsync() => await _taskAction();
+    }
+    private Dictionary<ulong, Thread> _workers = new();
+    private readonly Queue<AbstractPooledClass> _taskQueue = new();
     private readonly object _poolConditionalLock = new();
     private uint _terminationFlag = 0;
     private ulong _currentId = 1;
@@ -27,7 +46,7 @@ public class ThreadPool : IDisposable
 
     public Thread? GetWorker(ulong id)
     {
-        return !_threads.TryGetValue(id, out var t) ? null : t;
+        return !_workers.TryGetValue(id, out var t) ? null : t;
     }
     public ulong AllocateThread()
     {
@@ -35,7 +54,7 @@ public class ThreadPool : IDisposable
         {
             var newThread = new Thread(() => Start(_currentId));
             newThread.Start();
-            _threads[_currentId] = newThread;
+            _workers[_currentId] = newThread;
             return _currentId++;
         }
     }
@@ -47,7 +66,7 @@ public class ThreadPool : IDisposable
             {
                 var newThread = new Thread(() => Start(_currentId));
                 newThread.Start();
-                _threads[_currentId] = newThread;
+                _workers[_currentId] = newThread;
             }
         }
     }
@@ -57,7 +76,7 @@ public class ThreadPool : IDisposable
         if (_terminationFlag > 0 || amount == 0) return;
         lock (_poolConditionalLock)
         {
-            _terminationFlag = _threads.Count < amount ? (uint)_threads.Count : amount;
+            _terminationFlag = _workers.Count < amount ? (uint)_workers.Count : amount;
             for (uint i = 0, s = _terminationFlag; i < s; i++)
                 Monitor.Pulse(_poolConditionalLock);
         }
@@ -70,14 +89,25 @@ public class ThreadPool : IDisposable
     {
         lock (_poolConditionalLock)
         {
-            PooledTask pooled = new(task);
-            _taskQueue.Enqueue(pooled);
+            PooledActionTask pooledAction = new(task);
+            _taskQueue.Enqueue(pooledAction);
             Monitor.Pulse(_poolConditionalLock);
-            return pooled.Source.Task;
+            return pooledAction.Source.Task;
+        }
+    }
+    public Task EnqueueTask(Func<Task> task)
+    {
+        lock (_poolConditionalLock)
+        {
+            PooledAsyncTask pooledAction = new(task);
+            _taskQueue.Enqueue(pooledAction);
+            Monitor.Pulse(_poolConditionalLock);
+            return pooledAction.Source.Task;
         }
     }
     public void StopAll(bool cancelAll = false)
     {
+        var curr = _workers;
         lock (_poolConditionalLock)
         {
             _terminationFlag = uint.MaxValue;
@@ -90,12 +120,14 @@ public class ThreadPool : IDisposable
                 }
                 _taskQueue.Clear();
             }
+
+            _workers = new();
         }
-        foreach (var (_, thread) in _threads)
+        foreach (var (_, thread) in curr)
         {
             thread.Join();
         }
-
+        
         _terminationFlag = 0;
     }
 
@@ -113,16 +145,16 @@ public class ThreadPool : IDisposable
 
     public int ActiveThreadCount => _activeThread;
     
-    private static void Resolve(PooledTask task)
+    private static async Task Resolve(AbstractPooledClass actionTask)
     {
         try
         {
-            task.TaskAction.Invoke();
-            task.Source.SetResult(true);
+            await actionTask.InvokeAsync();
+            actionTask.Source.SetResult(true);
         }
         catch (Exception ex)
         {
-            task.Source.SetException(ex);
+            actionTask.Source.SetException(ex);
         }
     }
     
@@ -131,7 +163,7 @@ public class ThreadPool : IDisposable
         Enter();
         while (true)
         {
-            PooledTask task;
+            AbstractPooledClass actionTask;
 
             lock (_poolConditionalLock)
             {
@@ -142,17 +174,17 @@ public class ThreadPool : IDisposable
                 if (_terminationFlag > 0)
                 {
                     _terminationFlag--;
-                    _threads.Remove(myId);
+                    _workers.Remove(myId);
                     Exit();
                     return;
                 }
 
                 // Dequeue a task.
-                task = _taskQueue.Dequeue();
+                actionTask = _taskQueue.Dequeue();
             }
 
             // Execute the task.
-            Resolve(task);
+            Resolve(actionTask).Wait();
         }
     }
 

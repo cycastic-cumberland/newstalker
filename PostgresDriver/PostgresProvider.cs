@@ -3,6 +3,8 @@ using System.Text;
 using Dapper;
 using ExtendedComponents;
 using Npgsql;
+using Renci.SshNet;
+using Renci.SshNet.Common;
 
 namespace PostgresDriver;
 
@@ -35,6 +37,38 @@ public class PostgresTransaction : ITransaction
     public IDbTransaction GetRawTransaction() => _realTransaction;
 }
 
+public class SshTunnelSettings
+{
+    public string Username { get; set; } = "";
+    public string Host { get; set; } = "localhost";
+    public int Port { get; set; } = 22;
+    public string? Password { get; set; }
+    public string? PrivateKeyPath { get; set; }
+    public string? PrivateKeyContent { get; set; }
+
+    private static PrivateKeyFile ExtractPrivateKeyByPath(string privateKeyPath, string? passphrase)
+    {
+        if (passphrase != null) return new(privateKeyPath, passphrase);
+        return new(privateKeyPath);
+    }
+    private static PrivateKeyFile ExtractPrivateKeyByContent(string privateKeyContent, string? passphrase)
+    {
+        var stream = new MemoryStream(Encoding.UTF8.GetBytes(privateKeyContent));
+        if (passphrase != null) return new(stream, passphrase);
+        return new(stream);
+    }
+    public SshClient CreateClient()
+    {
+        if (Password == null && PrivateKeyPath == null && PrivateKeyContent == null)
+            throw new NullReferenceException("Either password or private key path must be provided");
+        if (PrivateKeyContent != null)
+            return new(Host, Port, Username, ExtractPrivateKeyByContent(PrivateKeyContent, Password));
+        if (PrivateKeyPath != null)
+            return new(Host, Port, Username, ExtractPrivateKeyByPath(PrivateKeyPath, Password));
+        return new(Host, Port, Username, Password);
+    }
+}
+
 public class PostgresConnectionSettings
 {
     public string Address { get; set; } = "localhost";
@@ -42,6 +76,7 @@ public class PostgresConnectionSettings
     public string DatabaseName { get; set; } = "";
     public string Username { get; set; } = "";
     public string Password { get; set; } = "";
+    public SshTunnelSettings? Tunnel { get; set; }
 
     public override string ToString()
     {
@@ -54,28 +89,179 @@ public class PostgresConnectionSettings
     }
 }
 
-public class PostgresProvider : IDisposable
+public class PostgresTunnelWarehouse : IDisposable, IDaemon
 {
+    private static PostgresTunnelWarehouse? _instance;
+    public static PostgresTunnelWarehouse Instance => _instance!;
+    private bool _isSingleton;
+
+    public PostgresTunnelWarehouse(bool isSingleton = false)
+    {
+        if (isSingleton)
+        {
+            if (_instance != null) _instance._isSingleton = false;
+            _instance = this;
+        }
+        _isSingleton = isSingleton;
+    }
+    
+    private struct ForwardedConnection : IDisposable
+    {
+        public PostgresConnectionSettings Connection;
+        public SshClient Client;
+        public ForwardedPortLocal Port;
+
+        public void Dispose()
+        {
+            Port.Stop();
+            Client.Dispose();
+            Port.Dispose();
+        }
+    }
+    private readonly Dictionary<string, ForwardedConnection> _tunnels = new();
+
+    public PostgresConnectionSettings AllocateTunnel(SshTunnelSettings settings, PostgresConnectionSettings conn)
+    {
+        var rep = conn.ToString();
+        lock (this)
+        {
+            if (_tunnels.TryGetValue(rep, out var ret)) return ret.Connection;
+            var sshClient = settings.CreateClient();
+            sshClient.Connect();
+            if (!sshClient.IsConnected) throw new SshConnectionException("Failed to open an SSH tunnel");
+            var fwdPort = new ForwardedPortLocal("127.0.0.1", settings.Host, (uint)conn.Port);
+            sshClient.AddForwardedPort(fwdPort);
+            fwdPort.Start();
+            PostgresConnectionSettings newConn = new()
+            {
+                Address = fwdPort.BoundHost,
+                DatabaseName = conn.DatabaseName,
+                Password = conn.Password,
+                Port = (int)fwdPort.BoundPort,
+                Tunnel = settings,
+                Username = conn.Username
+            };
+            _tunnels[rep] = new()
+            {
+                Connection = newConn,
+                Client = sshClient,
+                Port = fwdPort
+            };
+            return newConn;
+        }
+    }
+
+    public void ClearProxyPool()
+    {
+        lock (this)
+        {
+            foreach (var (_, conn) in _tunnels)
+            {
+                conn.Dispose();
+            }
+        }
+    }
+    public void Dispose()
+    {
+        ClearProxyPool();
+        lock (this)
+        {
+            if (_isSingleton) _instance = null!;
+        }
+    }
+
+    public void CloseDaemon()
+    {
+        Dispose();
+    }
+}
+
+public class PostgresProvider : IDisposable, IAsyncDisposable
+{
+    private class InnerTransaction : ITransaction
+    {
+        private readonly PostgresProvider _provider;
+        private readonly bool _isTopLevel;
+
+        public InnerTransaction(PostgresProvider provider, bool isTopLevel)
+        {
+            _provider = provider;
+            _isTopLevel = isTopLevel;
+        }
+
+        public void Dispose()
+        {
+            if (!_isTopLevel) return;
+            lock (_provider)
+            {
+                _provider._currentTransaction?.Dispose();
+                _provider._currentTransaction = null;
+            }
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            Dispose();
+            return ValueTask.CompletedTask;
+        }
+
+        public void Start()
+        {
+            if (!_isTopLevel) return;
+            lock (_provider)
+            {
+                _provider._currentTransaction?.Start();
+            }
+        }
+
+        public void RollBack()
+        {
+            lock (_provider)
+            {
+                _provider._currentTransaction?.RollBack();
+                _provider._currentTransaction = null;
+            }
+        }
+
+        public void Commit()
+        {
+            if (!_isTopLevel) return;
+            lock (_provider)
+            {
+                _provider._currentTransaction?.Commit();
+                _provider._currentTransaction = null;
+            }
+        }
+
+        public IDbTransaction? GetRawTransaction()
+        {
+            lock (_provider)
+            {
+                return _provider._currentTransaction?.GetRawTransaction();
+            }
+        }
+    }
+    private readonly PostgresTunnelWarehouse? _warehouse;
     private NpgsqlConnection? _conn;
     private PostgresTransaction? _currentTransaction;
     private PostgresConnectionSettings? _lastConnection;
-    // public NpgsqlConnection RawConnection => conn;
+    private PostgresTunnelWarehouse Warehouse => _warehouse ?? PostgresTunnelWarehouse.Instance;
 
-    public PostgresProvider()
+    public PostgresProvider(PostgresTunnelWarehouse? warehouse = null)
     {
-        
+        _warehouse = warehouse;
     }
 
-    public PostgresProvider(PostgresConnectionSettings settings)
+    public PostgresProvider(PostgresConnectionSettings settings, PostgresTunnelWarehouse? warehouse = null)
     {
+        _warehouse = warehouse;
         Connect(settings).Wait();
     }
 
     public async Task Connect(PostgresConnectionSettings settings)
     {
-        if (_conn != null) await _conn.DisposeAsync();
         _lastConnection = settings;
-        for (var i = 0; i < ProjectSettings.Instance.Get(SettingsCatalog.CoreDbMaxReconnectionAttempt, 5); i++)
+        for (var i = 0; i < ProjectSettings.Instance.Get(SettingsCatalog.CoreDbMaxReconnectionAttempt, 2); i++)
         {
             try
             {
@@ -95,7 +281,11 @@ public class PostgresProvider : IDisposable
     public async Task Reconnect()
     {
         if (_lastConnection == null) return;
-        if (_conn != null) await _conn.DisposeAsync();
+        await Disconnect();
+        if (_lastConnection.Tunnel != null)
+        {
+            _lastConnection = Warehouse.AllocateTunnel(_lastConnection.Tunnel, _lastConnection);
+        }
         _conn = new NpgsqlConnection(_lastConnection.ToString());
         await _conn.OpenAsync();
     }
@@ -110,7 +300,7 @@ public class PostgresProvider : IDisposable
     {
         return await _conn.QueryAsync<T>(sql, param: param, transaction: transaction);
     }
-
+    
     public async Task<int> Execute(string sql, object? param = null, IDbTransaction? transaction = null)
     {
         return await _conn.ExecuteAsync(sql, param: param, transaction: transaction);
@@ -186,79 +376,69 @@ public class PostgresProvider : IDisposable
     {
         Disconnect().Wait();
     }
-    public T Write<T>(Func<ITransaction, T> action)
+    public async ValueTask DisposeAsync()
+    {
+        await Disconnect();
+    }
+    private InnerTransaction SecureTransaction()
     {
         lock (this)
         {
-            PostgresTransaction transaction;
-            bool isTopLevel;
-            // No running transaction
-            if (_currentTransaction == null)
-            {
-                transaction = CreateTransaction();
-                isTopLevel = true;
-            }
-            else
-            {
-                transaction = _currentTransaction;
-                isTopLevel = false;
-            }
-            
-            try
-            {
-                if (isTopLevel) transaction.Start();
-                var re = action(transaction);
-                if (!isTopLevel) return re;
-                transaction.Commit();
-                transaction.Dispose();
-                _currentTransaction = null;
-                return re;
-            }
-            catch (Exception)
-            {
-                // If there's an exception, rollback top level transaction, and dispose
-                _currentTransaction?.RollBack();
-                _currentTransaction?.Dispose();
-                _currentTransaction = null;
-                throw;
-            }
+            if (_currentTransaction != null) return new InnerTransaction(this, false);
+            _currentTransaction = CreateTransaction();
+            return new InnerTransaction(this, true);
         }
     }
-    public void Write(Action<ITransaction> action)
+    public T OpenTransaction<T>(Func<T> func)
     {
-        lock (this)
-        {
-            PostgresTransaction transaction;
-            bool isTopLevel;
-            // No running transaction
-            if (_currentTransaction == null)
-            {
-                transaction = CreateTransaction();
-                isTopLevel = true;
-            }
-            else
-            {
-                transaction = _currentTransaction;
-                isTopLevel = false;
-            }
-            
-            try
-            {
-                if (isTopLevel) transaction.Start();
-                action(transaction);
-                if (!isTopLevel) return;
-                transaction.Commit();
-                transaction.Dispose();
-                _currentTransaction = null;
-            }
-            catch (Exception)
-            {
-                // If there's an exception, rollback top level transaction, and dispose
-                _currentTransaction?.RollBack();
-                _currentTransaction?.Dispose();
-                _currentTransaction = null;
-                throw;
-            }
-        }
+        using var transaction = SecureTransaction();
+        var ret = func();
+        transaction.Commit();
+        return ret;
+    }
+    public T OpenTransaction<T>(Func<ITransaction, T> func)
+    {
+        using var transaction = SecureTransaction();
+        var ret = func(transaction);
+        transaction.Commit();
+        return ret;
+    }
+    public async Task<T> OpenTransaction<T>(Func<Task<T>> func)
+    {
+        await using var transaction = SecureTransaction();
+        var ret = await func();
+        transaction.Commit();
+        return ret;
+    }
+    public async Task<T> OpenTransaction<T>(Func<ITransaction, Task<T>> func)
+    {
+        await using var transaction = SecureTransaction();
+        var ret = await func(transaction);
+        transaction.Commit();
+        return ret;
+    }
+    public void OpenTransaction(Action func)
+    {
+        using var transaction = SecureTransaction();
+        func();
+        transaction.Commit();
+    }
+    public void OpenTransaction(Action<ITransaction> func)
+    {
+        using var transaction = SecureTransaction();
+        func(transaction);
+        transaction.Commit();
+    }
+    public async Task OpenTransaction(Func<Task> func)
+    {
+        await using var transaction = SecureTransaction();
+        await func();
+        transaction.Commit();
+    }
+    public async Task OpenTransaction(Func<ITransaction, Task> func)
+    {
+        await using var transaction = SecureTransaction();
+        await func(transaction);
+        transaction.Commit();
     }
 }

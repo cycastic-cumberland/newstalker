@@ -7,13 +7,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="Dapper" Version="2.0.151" />
-      <PackageReference Include="Npgsql" Version="7.0.4" />
-    </ItemGroup>
-
-    <ItemGroup>
       <ProjectReference Include="..\ExtendedComponents\ExtendedComponents.csproj" />
-      <ProjectReference Include="..\SSH.NET\src\Renci.SshNet\Renci.SshNet.csproj" />
     </ItemGroup>
 
 </Project>
