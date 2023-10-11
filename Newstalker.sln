@@ -30,6 +30,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NewstalkerPostgresGrader", 
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NewstalkerCore", "NewstalkerCore\NewstalkerCore.csproj", "{7B5A400B-CAC8-498A-8F59-6A4B3892CEC9}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NewstalkerWebAPI", "NewstalkerWebAPI\NewstalkerWebAPI.csproj", "{001D463A-1BBD-4D75-A10E-725B2B979072}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -96,5 +98,9 @@ Global
 		{7B5A400B-CAC8-498A-8F59-6A4B3892CEC9}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{7B5A400B-CAC8-498A-8F59-6A4B3892CEC9}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{7B5A400B-CAC8-498A-8F59-6A4B3892CEC9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{001D463A-1BBD-4D75-A10E-725B2B979072}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{001D463A-1BBD-4D75-A10E-725B2B979072}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{001D463A-1BBD-4D75-A10E-725B2B979072}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{001D463A-1BBD-4D75-A10E-725B2B979072}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

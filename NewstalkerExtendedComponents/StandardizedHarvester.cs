@@ -47,6 +47,7 @@ public class StandardizedHarvester : IDisposable
         }
     }
     
+    
     public async Task<IEnumerable<string>> QueryFrontPageAsync(AbstractNewsOutlet outlet, AbstractNewsOutlet.FrontPageQueryOptions options)
     {
         try

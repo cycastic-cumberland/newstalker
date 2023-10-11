@@ -177,7 +177,7 @@ public class FiniteObjectPool<T> : ObjectPool<T>
         public T GetInstance() => _instance;
     }
 
-    private readonly object _lock = new[] { 0 };
+    private readonly object _lock;
     private readonly uint _capacity;
     private T[] _objectQueue;
     private uint _iterator;
@@ -191,6 +191,7 @@ public class FiniteObjectPool<T> : ObjectPool<T>
         _capacity = capacity;
         _iterator = capacity;
         _objectQueue = new T[capacity + 1];
+        _lock = new List<int>();
         // _objectQueue[0] = default!;
         for (uint i = 1; i <= capacity; i++)
         {

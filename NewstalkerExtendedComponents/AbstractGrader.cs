@@ -14,7 +14,7 @@ public abstract class AbstractGrader : IDisposable
         public TimeSpan PopularityWindow;
         public string[] OutletSelections;
         public string TargetSelection;
-        // public float NormalizedScale;
+        public double NormalizedScale;
         public GradeType GradingTarget;
     }
     public virtual void Dispose()

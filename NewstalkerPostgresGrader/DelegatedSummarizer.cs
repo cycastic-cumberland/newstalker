@@ -11,6 +11,7 @@ public struct DelegatedSummarizerSettings
     public string DelegatedExtractorAddress { get; set; }
     public string DelegationApiKey { get; set; }
     public string DelegationAuthorizationSchema { get; set; }
+    public uint HttpClientTimeout { get; set; }
 }
 
 public class DelegatedSummarizer : AbstractSummarizer
@@ -48,6 +49,7 @@ public class DelegatedSummarizer : AbstractSummarizer
         _clientPool = new SynchronousObjectPool<HttpClient>(() =>
         {
             var ret = new HttpClient();
+            ret.Timeout = TimeSpan.FromSeconds(settings.HttpClientTimeout);
             if (!string.IsNullOrEmpty(settings.DelegationAuthorizationSchema) && !string.IsNullOrEmpty(settings.DelegationApiKey))
                 ret.DefaultRequestHeaders.Add("Authorization",
                     $"{settings.DelegationAuthorizationSchema} {settings.DelegationApiKey}");

@@ -14,7 +14,6 @@ public abstract class StandardizedScrapperBasedOutlet : AbstractNewsOutlet
     }
     private readonly ObjectPool<HtmlWeb> _webPool = new SynchronousObjectPool<HtmlWeb>(() => new ());
     private readonly LeastRecentlyUsedCache<string, HtmlDocument> _documentCache;
-    private readonly OutletSettings _settings;
     protected abstract string GetContentClass();
     protected abstract string GetTitleClass();
     protected abstract string GetAuthorClass();
@@ -39,13 +38,14 @@ public abstract class StandardizedScrapperBasedOutlet : AbstractNewsOutlet
 
     protected StandardizedScrapperBasedOutlet(OutletSettings? settings = null)
     {
+        OutletSettings settings1;
         if (settings == null)
-            _settings = new()
+            settings1 = new()
             {
                 CacheCapacity = 64,
             };
-        else _settings = settings;
-        _documentCache = new ThreadSafeLeastRecentlyUsedCache<string, HtmlDocument>((int)_settings.CacheCapacity);
+        else settings1 = settings;
+        _documentCache = new ThreadSafeLeastRecentlyUsedCache<string, HtmlDocument>((int)settings1.CacheCapacity);
     }
     
     public override void Dispose()

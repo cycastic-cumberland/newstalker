@@ -81,8 +81,9 @@ public class PostgresConnectionSettings
     public override string ToString()
     {
         StringBuilder builder = new StringBuilder();
-        builder.Append($"Server={Address};Port={Port};")
-               .Append($"Database={DatabaseName};Username={Username};");
+        builder.Append($"Server={Address};");
+        if (Port != 0) builder.Append($"Port={Port};");
+        builder.Append($"Database={DatabaseName};Username={Username};");
         if (Password.Length != 0)
             builder.Append($"Password='{Password}';");
         return builder.ToString();

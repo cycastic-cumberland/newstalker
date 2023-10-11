@@ -7,6 +7,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <ProjectReference Include="..\ExtendedPostgresDriver\ExtendedPostgresDriver.csproj" />
       <ProjectReference Include="..\NewstalkerPostgresETL\NewstalkerPostgresETL.csproj" />
       <ProjectReference Include="..\NewstalkerPostgresGrader\NewstalkerPostgresGrader.csproj" />
     </ItemGroup>

@@ -15,7 +15,7 @@ public class PostgresGrader : AbstractGrader
     {
         public long Count;
     }
-    private struct StringRepStruct
+    public struct StringRepStruct
     {
         public string StringRep;
     }
@@ -124,6 +124,8 @@ public class PostgresGrader : AbstractGrader
     private async Task<(string url, double relevancy)> GradeArticleCombinedRelevancyAsync(GraderSettings settings, string articleUrl,
         IReadOnlyDictionary<string, double> tagsRelevancyTable, IReadOnlyDictionary<string, double> keywordsRelevancyTable, DoubleWrapper wrappedDouble)
     {
+        var tagsWeight = settings.NormalizedScale == 0.0 ? _tagsWeight : settings.NormalizedScale;
+        var kwWeight = settings.NormalizedScale == 0.0 ? _kwWeight : 1.0 - settings.NormalizedScale;
         var (timeBegin, timeEnd) = GetTimeVector(settings.PopularityWindow, settings.TimeEnd);
         try
         {
@@ -168,7 +170,7 @@ public class PostgresGrader : AbstractGrader
                 keywordRelevancy += kw.Relevancy * rel;
             }
 
-            var combinedRelevancy = (tagRelevancy * _tagsWeight) + (keywordRelevancy * _kwWeight);
+            var combinedRelevancy = (tagRelevancy * tagsWeight) + (keywordRelevancy * kwWeight);
             lock (wrappedDouble)
             {
                 wrappedDouble.Value += combinedRelevancy;
@@ -272,8 +274,9 @@ public class PostgresGrader : AbstractGrader
     {
         var (timeBegin, timeEnd) = GetTimeVector(settings.PopularityWindow, settings.TimeEnd);
         return await QueryTemplateAsync("QueryArticlesAmountAsync",
-            "SELECT COUNT(scrape_results.word_count) AS Count FROM scrape_results " +
-            "WHERE outlet_url = ANY(@outlets)",
+            "SELECT COUNT(word_count) AS Count FROM scrape_results " +
+            "WHERE time_posted > @timeBegin AND time_posted < @timeEnd " +
+            "AND outlet_url = ANY(@outlets)",
             new { timeBegin, timeEnd, outletUrls = settings.OutletSelections, outlets = settings.OutletSelections });
     }
     

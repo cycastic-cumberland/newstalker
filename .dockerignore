@@ -1,5 +1,7 @@
-﻿**/.dockerignore
+﻿**/venv
+**/__pycache__
 **/.env
+**/.dockerignore
 **/.git
 **/.gitignore
 **/.project
