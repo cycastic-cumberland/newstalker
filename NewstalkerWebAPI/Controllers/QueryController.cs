@@ -6,7 +6,7 @@ using NewstalkerWebAPI.Schemas;
 namespace NewstalkerWebAPI.Controllers;
 
 [ApiController]
-[Route("[controller]")]
+[Route("query")]
 public class QueryController : ControllerBase
 {
     private struct QueryCountResponse
@@ -23,7 +23,7 @@ public class QueryController : ControllerBase
         return Ok("Hello world");
     }
     
-    [HttpPost("tags")]
+    [HttpPost("tags/count")]
     public async Task<IActionResult> GetTagsCount(DateTime timeFrom, DateTime timeTo, string tag, OutletSelections? outlets = null)
     {
         var ret = await Conductor.QueryAmountAsync(new()
@@ -40,7 +40,7 @@ public class QueryController : ControllerBase
         });
     }
     
-    [HttpPost("keywords")]
+    [HttpPost("keywords/count")]
     public async Task<IActionResult> GetKeywordsCount(DateTime timeFrom, DateTime timeTo, string keyword, OutletSelections? outlets = null)
     {
         var ret = await Conductor.QueryAmountAsync(new()

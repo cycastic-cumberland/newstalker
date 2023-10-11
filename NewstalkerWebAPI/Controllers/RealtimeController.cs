@@ -5,7 +5,7 @@ using NewstalkerWebAPI.Schemas;
 namespace NewstalkerWebAPI.Controllers;
 
 [ApiController]
-[Route("[controller]")]
+[Route("realtime")]
 public class RealtimeController : ControllerBase
 {
     private static NewstalkerPostgresConductor Conductor

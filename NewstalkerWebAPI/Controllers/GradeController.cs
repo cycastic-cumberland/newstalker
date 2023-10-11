@@ -6,7 +6,7 @@ using NewstalkerWebAPI.Schemas;
 namespace NewstalkerWebAPI.Controllers;
 
 [ApiController]
-[Route("[controller]")]
+[Route("grade")]
 public class GradeController : ControllerBase
 {
     private static NewstalkerPostgresConductor Conductor
