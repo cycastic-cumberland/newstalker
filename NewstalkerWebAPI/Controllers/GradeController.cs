@@ -1,12 +1,15 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NewstalkerExtendedComponents;
 using NewstalkerPostgresGrader;
+using NewstalkerWebAPI.Authority;
 using NewstalkerWebAPI.Schemas;
 
 namespace NewstalkerWebAPI.Controllers;
 
 [ApiController]
 [Route("grade")]
+[Authorize(AuthenticationSchemes = ApiKeyAuthenticationOptions.DefaultScheme)]
 public class GradeController : ControllerBase
 {
     private static NewstalkerPostgresConductor Conductor

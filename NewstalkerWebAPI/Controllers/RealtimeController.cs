@@ -1,11 +1,14 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NewstalkerPostgresGrader;
+using NewstalkerWebAPI.Authority;
 using NewstalkerWebAPI.Schemas;
 
 namespace NewstalkerWebAPI.Controllers;
 
 [ApiController]
 [Route("realtime")]
+[Authorize(AuthenticationSchemes = ApiKeyAuthenticationOptions.DefaultScheme)]
 public class RealtimeController : ControllerBase
 {
     private static NewstalkerPostgresConductor Conductor

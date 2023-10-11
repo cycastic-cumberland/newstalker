@@ -1,12 +1,15 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NewstalkerExtendedComponents;
 using NewstalkerPostgresGrader;
+using NewstalkerWebAPI.Authority;
 using NewstalkerWebAPI.Schemas;
 
 namespace NewstalkerWebAPI.Controllers;
 
 [ApiController]
 [Route("query")]
+[Authorize(AuthenticationSchemes = ApiKeyAuthenticationOptions.DefaultScheme)]
 public class QueryController : ControllerBase
 {
     private struct QueryCountResponse
@@ -72,7 +75,7 @@ public class QueryController : ControllerBase
             Count = ret
         });
     }
-
+    
     [HttpGet("article")]
     public async Task<IActionResult> QueryArticle(string articleUrl)
     {

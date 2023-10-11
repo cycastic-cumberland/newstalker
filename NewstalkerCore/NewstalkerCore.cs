@@ -15,15 +15,36 @@ internal class EnvironmentVariableException : Exception
 
 public static class NewstalkerCore
 {
+    public enum MasterKeyAuthorizationNResult
+    {
+        Success,
+        Mismatched,
+        NotEnrolled
+    }
+
+    private static uint _databaseConnectionLimit = 16;
+    private static PostgresConnectionSettings? _pgConnectionSettings;
+    private static string? _masterKey;
     private static DaemonManager? _manager;
     public static DaemonManager ActiveDaemon => _manager ??= new();
+    public static PostgresConnectionSettings PostgresConnection => _pgConnectionSettings ??= GetConnectionSettings();
+    public static uint DatabaseConnectionLimit => _databaseConnectionLimit;
     private static Exception EnvironmentValuePanic(string variable)
     {
         return new EnvironmentVariableException($"Environment variable {variable} is empty");
     }
 
+    public static MasterKeyAuthorizationNResult AuthorizeMasterKey(string? key)
+    {
+        if (key == null) return MasterKeyAuthorizationNResult.Mismatched;
+        var internedString = string.Intern(key);
+        if (_masterKey == null) return MasterKeyAuthorizationNResult.NotEnrolled;
+        return internedString == _masterKey ? MasterKeyAuthorizationNResult.Success : MasterKeyAuthorizationNResult.Mismatched;
+    }
+
     private static PostgresConnectionSettings GetConnectionSettings()
     {
+        _masterKey = Environment.GetEnvironmentVariable("NWA_MASTER_KEY"); 
         var host = Environment.GetEnvironmentVariable("PG_HOST");
         var port = Environment.GetEnvironmentVariable("PG_PORT");
         var dbName = Environment.GetEnvironmentVariable("PG_DB_NAME");
@@ -153,15 +174,18 @@ public static class NewstalkerCore
     public static async Task Run()
     {
         Console.WriteLine("Enrolling database connection settings");
-        var pgConnectionSettings = GetConnectionSettings();
+        _pgConnectionSettings = GetConnectionSettings();
         var logTable = GetLogTableName();
+        Console.WriteLine(_masterKey == null
+            ? "No master key enrolled, administrative activities restricted"
+            : "Master key enrolled");
         Console.WriteLine("Database connection settings enrolled");
-        Console.WriteLine($"Host: {pgConnectionSettings.Address}");
-        Console.WriteLine($"Port: {pgConnectionSettings.Port}");
-        Console.WriteLine($"Database name: {pgConnectionSettings.DatabaseName}");
-        Console.WriteLine($"Username: {pgConnectionSettings.Username}");
+        Console.WriteLine($"Host: {_pgConnectionSettings.Address}");
+        Console.WriteLine($"Port: {_pgConnectionSettings.Port}");
+        Console.WriteLine($"Database name: {_pgConnectionSettings.DatabaseName}");
+        Console.WriteLine($"Username: {_pgConnectionSettings.Username}");
         Console.WriteLine($"Password: ******");
-        Console.WriteLine($"Use SSH tunnel: {pgConnectionSettings.Tunnel != null}");
+        Console.WriteLine($"Use SSH tunnel: {_pgConnectionSettings.Tunnel != null}");
         Console.WriteLine($"Log table available: {logTable != null}");
         ActiveDaemon.Manage("tunnel", () =>
         {
@@ -170,7 +194,8 @@ public static class NewstalkerCore
         });
         Console.WriteLine();
         Console.WriteLine("Enrolling Conductor settings");
-        var conductorSettings = await GetConductorSettings(pgConnectionSettings);
+        var conductorSettings = await GetConductorSettings(_pgConnectionSettings);
+        _databaseConnectionLimit = conductorSettings.PostgresConnectionsLimit;
         Console.WriteLine("Conductor settings enrolled");
         Console.WriteLine($"Garbage collection interval: {conductorSettings.GarbageCollectionInterval}");
         Console.WriteLine($"Harvest interval: {conductorSettings.HarvestInterval}");
@@ -191,7 +216,7 @@ public static class NewstalkerCore
         {
             Console.WriteLine("Conductor daemon is now starting...");
             return new NewstalkerPostgresConductor(conductorSettings,
-                GetLoggers(pgConnectionSettings, logTable));
+                GetLoggers(_pgConnectionSettings, logTable));
         });
     }
 }
