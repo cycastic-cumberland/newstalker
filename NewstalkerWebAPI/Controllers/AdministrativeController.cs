@@ -1,6 +1,8 @@
+using ExtendedComponents;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NewstalkerCore;
+using NewstalkerPostgresGrader;
 using NewstalkerWebAPI.Authority;
 using PostgresDriver;
 
@@ -63,5 +65,42 @@ public class AdministrativeController : ControllerBase
         await using var db = new PostgresProvider(NewstalkerCore.NewstalkerCore.PostgresConnection);
         await Initializer.InitializeAdministrativeTables(db);
         return Ok();
+    }
+
+    [HttpPost("db/run_gc")]
+    public async Task<IActionResult> RunGarbageCollection()
+    {
+        var conductor = NewstalkerCore.NewstalkerCore.ActiveDaemon.Get("conductor") as NewstalkerPostgresConductor;
+        if (conductor == null)
+            return StatusCode(503, "Conductor daemon is not running");
+        var affected = await conductor.RunGarbageCollectionAsync();
+        return Ok($"Affected row(s): {affected}");
+    }
+
+    [HttpGet("logs")]
+    public async Task<IActionResult> GetLogs(DateTime timeFrom, DateTime timeTo, 
+        int mask = (int)LogSegment.LogSegmentType.Message & (int)LogSegment.LogSegmentType.Exception, uint limit = 100)
+    {
+        var ret = await NewstalkerCore.NewstalkerCore.GetLogs(timeFrom, timeTo, mask, limit);
+        return Ok(ret.Select(o => o.Convert())
+            .ToDictionary(o => o.Timestamp, o => $"[{(int)o.LogType}] {o.Header}: {o.Message}"));
+    }
+    [HttpGet("logs")]
+    public async Task<IActionResult> GetLogs(int mask = (int)LogSegment.LogSegmentType.Message 
+                                                        & (int)LogSegment.LogSegmentType.Exception, uint limit = 100)
+    {
+        var ret = await NewstalkerCore.NewstalkerCore.GetLogs(mask, limit);
+        return Ok(ret.Select(o => o.Convert())
+            .ToDictionary(o => o.Timestamp, o => $"[{(int)o.LogType}] {o.Header}: {o.Message}"));
+    }
+    [HttpGet("logs")]
+    public async Task<IActionResult> GetLogs(TimeSpan span,
+        int mask = (int)LogSegment.LogSegmentType.Message & (int)LogSegment.LogSegmentType.Exception, uint limit = 100)
+    {
+        var now = DateTime.Now;
+        var ret = await NewstalkerCore.NewstalkerCore.GetLogs(now - span, now,
+            mask, limit);
+        return Ok(ret.Select(o => o.Convert())
+            .ToDictionary(o => o.Timestamp, o => $"[{(int)o.LogType}] {o.Header}: {o.Message}"));
     }
 }

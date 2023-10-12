@@ -24,6 +24,7 @@ public static class NewstalkerCore
 
     private static uint _databaseConnectionLimit = 16;
     private static PostgresConnectionSettings? _pgConnectionSettings;
+    private static PostgresLogger? _pgLogger;
     private static string? _masterKey;
     private static DaemonManager? _manager;
     public static DaemonManager ActiveDaemon => _manager ??= new();
@@ -71,6 +72,7 @@ public static class NewstalkerCore
                                || string.IsNullOrEmpty(sshPrivateKeyPath)))
             tunnelSettings = new()
             {
+                Username = sshUsername,
                 Host = host,
                 Port = sshPortAsInt,
                 Password = sshPassphrase,
@@ -132,7 +134,7 @@ public static class NewstalkerCore
         {
             ConnectionSettings = connectionSettings,
             GarbageCollectionInterval = TimeSpan.FromHours(uint.Parse(gcInterval)),
-            HarvestInterval = TimeSpan.FromDays(uint.Parse(harvestInterval)),
+            HarvestInterval = TimeSpan.FromHours(uint.Parse(harvestInterval)),
             Outlets = outlets,
             DefaultQueryOption = new()
             {
@@ -166,9 +168,23 @@ public static class NewstalkerCore
 
     private static LoggingServerDelegate[] GetLoggers(PostgresConnectionSettings conn, string? pgLogTable)
     {
-        return pgLogTable == null
-            ? new LoggingServerDelegate[] { new StdLoggingServerDelegate() }
-            : new LoggingServerDelegate[] { new StdLoggingServerDelegate(), new PostgresLogger(conn, pgLogTable) };
+        if (pgLogTable == null) return new LoggingServerDelegate[] { new StdLoggingServerDelegate() };
+        _pgLogger = new PostgresLogger(conn, pgLogTable);
+        return new LoggingServerDelegate[] { new StdLoggingServerDelegate(), _pgLogger };
+    }
+    
+    public static Task<IEnumerable<PostgresLogSegment>> GetLogs(DateTime timeFrom, DateTime timeTo, int typeFilter, uint limit)
+    {
+        return _pgLogger == null
+            ? Task.FromResult((IEnumerable<PostgresLogSegment>)ArraySegment<PostgresLogSegment>.Empty)
+            : _pgLogger.GetLogs(timeFrom, timeTo, typeFilter, limit);
+    }
+
+    public static Task<IEnumerable<PostgresLogSegment>> GetLogs(int typeFilter, uint limit)
+    {
+        return _pgLogger == null
+            ? Task.FromResult((IEnumerable<PostgresLogSegment>)ArraySegment<PostgresLogSegment>.Empty)
+            : _pgLogger.GetLogs(typeFilter, limit);
     }
 
     public static async Task Run()

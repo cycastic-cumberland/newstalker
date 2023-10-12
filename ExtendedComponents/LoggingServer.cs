@@ -1,13 +1,13 @@
 namespace ExtendedComponents;
 
-public class LogSegment
+public struct LogSegment
 {
     public enum LogSegmentType
     {
-        Message,
-        Exception
+        Message = 1,
+        Exception = 2
     }
-    public long Timestamp;
+    public DateTime Timestamp;
     public string Header = "";
     public string Message = "";
     public LogSegmentType LogType = LogSegmentType.Message;
@@ -16,7 +16,7 @@ public class LogSegment
     public LogSegment(){}
     public LogSegment(string header, string message, LogSegmentType logSegmentType, object? metadata = null)
     {
-        Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        Timestamp = DateTime.UtcNow;
         Header = header;
         Message = message;
         LogType = logSegmentType;
@@ -35,7 +35,7 @@ public class StdLoggingServerDelegate : LoggingServerDelegate
     public override void Write(LogSegment log)
     {
         var msg =
-            $"[{DateTimeOffset.FromUnixTimeMilliseconds(log.Timestamp).ToLocalTime():yyyy-MM-dd HH:mm:ss}] {log.Header}: {log.Message}";
+            $"[{log.Timestamp:yyyy-MM-dd HH:mm:ss} UTC] {log.Header}: {log.Message}";
         if (log.LogType == LogSegment.LogSegmentType.Exception)
             Console.Error.WriteLine(msg);
         else

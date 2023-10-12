@@ -1,3 +1,4 @@
+using ExtendedComponents;
 using Microsoft.OpenApi.Models;
 using NewstalkerWebAPI.Authority;
 using NewstalkerWebAPI.Middlewares;
@@ -6,8 +7,17 @@ namespace NewstalkerWebAPI;
 
 public static class Program
 {
+    private static Dictionary<string, string> _cmdArgs = null!;
+    private static bool _swaggerEnabled;
+    private static void CmdArgumentsParse(string[] args)
+    {
+        _cmdArgs = new CmdArgumentsParser(args).Parse();
+        _cmdArgs.TryAdd("swagger-enabled", "false");
+        _swaggerEnabled = bool.Parse(_cmdArgs["swagger-enabled"]);
+    }
     public static async Task Main(string[] args)
     {
+        CmdArgumentsParse(args);
         await NewstalkerCore.NewstalkerCore.Run();
         var builder = WebApplication.CreateBuilder(args);
 
@@ -68,7 +78,7 @@ public static class Program
 
         var app = builder.Build();
 
-        if (app.Environment.IsDevelopment())
+        if (_swaggerEnabled || app.Environment.IsDevelopment())
         {
             app.UseSwagger();
             app.UseSwaggerUI();

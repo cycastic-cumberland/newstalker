@@ -46,7 +46,8 @@ public class NewstalkerPostgresConductor : AbstractDaemon
     }
     
     public const double StandardTagsWeight = 0.07132897;
-
+    
+    
     private readonly NewstalkerPostgresConductorSettings _settings;
     private readonly LoggingServer _logger = new();
     private readonly ObjectPool<PostgresProvider> _queryFactory;
@@ -421,17 +422,17 @@ public class NewstalkerPostgresConductor : AbstractDaemon
         }
     }
 
-    private async Task RunGarbageCollectionAsync()
+    public async Task<int> RunGarbageCollectionAsync()
     {
         using var unused = _loggerFactory.Create("RunGarbageCollectionAsync");
-
+        var affected = 0;
         try
         {
             var threshold = DateTime.Now - _settings.GarbageCollectionInterval;
             using var wrapped = _queryFactory.Borrow();
             var db = wrapped.GetInstance();
 
-            var affected = await db.TryExecute("DELETE FROM tags_used WHERE article_url IN " +
+            affected = await db.TryExecute("DELETE FROM tags_used WHERE article_url IN " +
                                                "(SELECT url AS article_url FROM scrape_results WHERE " +
                                                "time_posted < @time); " +
                                                "DELETE FROM extracted_keywords WHERE article_url IN " +
@@ -454,6 +455,8 @@ public class NewstalkerPostgresConductor : AbstractDaemon
         {
             _lastGarbageCollectionTime = DateTime.Now;
         }
+
+        return affected;
     }
 
     private void RunHarvest()
