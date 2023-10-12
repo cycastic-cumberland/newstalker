@@ -1,4 +1,5 @@
 using ExtendedComponents;
+using ExtendedPostgresDriver;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NewstalkerCore;
@@ -77,21 +78,25 @@ public class AdministrativeController : ControllerBase
         return Ok($"Affected row(s): {affected}");
     }
 
+    private static Dictionary<string, string> SerializeLogs(IEnumerable<PostgresLogSegment> logs)
+    {
+        return logs
+            .ToDictionary(o => $"[{o.Id} | {o.Timestamp} UTC | {o.Type}]", o => $"{o.Header}: {o.Message}");
+    }
+
     [HttpGet("logs/by-span")]
     public async Task<IActionResult> GetLogs(DateTime timeFrom, DateTime timeTo, 
         int mask = (int)LogSegment.LogSegmentType.Message & (int)LogSegment.LogSegmentType.Exception, uint limit = 100)
     {
         var ret = await NewstalkerCore.NewstalkerCore.GetLogs(timeFrom, timeTo, mask, limit);
-        return Ok(ret.Select(o => o.Convert())
-            .ToDictionary(o => $"[{o.Timestamp} Type:{(int)o.LogType}]", o => $"{o.Header}: {o.Message}"));
+        return Ok(SerializeLogs(ret));
     }
     [HttpGet("logs/latest")]
     public async Task<IActionResult> GetLogs(int mask = (int)LogSegment.LogSegmentType.Message 
                                                         & (int)LogSegment.LogSegmentType.Exception, uint limit = 100)
     {
         var ret = await NewstalkerCore.NewstalkerCore.GetLogs(mask, limit);
-        return Ok(ret.Select(o => o.Convert())
-            .ToDictionary(o => $"[{o.Timestamp} :{(int)o.LogType}]", o => $"{o.Header}: {o.Message}"));
+        return Ok(SerializeLogs(ret));
     }
     [HttpGet("logs/by-latest-span")]
     public async Task<IActionResult> GetLogs(uint seconds,
@@ -100,7 +105,6 @@ public class AdministrativeController : ControllerBase
         var now = DateTime.Now;
         var ret = await NewstalkerCore.NewstalkerCore.GetLogs(now - TimeSpan.FromSeconds(seconds), now,
             mask, limit);
-        return Ok(ret.Select(o => o.Convert())
-            .ToDictionary(o => $"[{o.Timestamp} :{(int)o.LogType}]", o => $"{o.Header}: {o.Message}"));
+        return Ok(SerializeLogs(ret));
     }
 }

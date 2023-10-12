@@ -6,7 +6,8 @@ namespace ExtendedPostgresDriver;
 
 public struct PostgresLogSegment
 {
-    public long Timestamp;
+    public long Id;
+    public DateTime Timestamp;
     public string Header;
     public string Message;
     public int Type;
@@ -16,7 +17,7 @@ public struct PostgresLogSegment
     {
         return new()
         {
-            Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(Timestamp).DateTime.ToUniversalTime(),
+            Timestamp = Timestamp,
             Header = Header,
             Message = Message,
             LogType = (LogSegment.LogSegmentType)Type,
@@ -81,7 +82,12 @@ public class PostgresLogger : LoggingServerDelegate
     public async Task<IEnumerable<PostgresLogSegment>> GetLogs(DateTime timeFrom, DateTime timeTo, int typeFilter, uint limit)
     {
         return await _provider.TryMappedQuery<PostgresLogSegment>(
-            $"SELECT * FROM {_tableName} " +
+            $"SELECT id AS Id," +
+            $"timestamp AS Timestamp, " +
+            $"header AS Header, " +
+            $"message AS Message, " +
+            $"log_type AS LogType, " +
+            $"metadata AS Meta FROM {_tableName} " +
             "WHERE timestamp > @timeFrom AND " +
             "timestamp <= @timeTo AND " +
             "log_type & @mask != 0 ORDER BY timestamp DESC LIMIT @limit;",

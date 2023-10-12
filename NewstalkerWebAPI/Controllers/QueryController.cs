@@ -124,7 +124,7 @@ public class QueryController : ControllerBase
             return NotFound("No session started");
         }
     }
-    [HttpGet("sessions/latest/by_state")]
+    [HttpGet("sessions/latest/by-state")]
     public async Task<IActionResult> GetLatestSession(bool isFinished)
     {
         try
@@ -144,7 +144,7 @@ public class QueryController : ControllerBase
         return Ok((await Conductor.GetSessions(timeFrom, timeTo)).ToArray());
     }
     
-    [HttpGet("sessions/by_state")]
+    [HttpGet("sessions/by-state")]
     public async Task<IActionResult> GetSessions(DateTime timeFrom, DateTime timeTo, bool isFinished)
     {
         return Ok((await Conductor.GetSessions(timeFrom, timeTo, isFinished)).ToArray());
