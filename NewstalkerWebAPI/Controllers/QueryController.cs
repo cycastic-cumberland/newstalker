@@ -149,4 +149,10 @@ public class QueryController : ControllerBase
     {
         return Ok((await Conductor.GetSessions(timeFrom, timeTo, isFinished)).ToArray());
     }
+
+    [HttpGet("sessions/next-harvest")]
+    public IActionResult GetBookedNextHarvest()
+    {
+        return Ok(Conductor.GetNextHarvestTime());
+    }
 }

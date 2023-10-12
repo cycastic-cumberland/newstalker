@@ -60,13 +60,21 @@ public class NewstalkerPostgresConductor : AbstractDaemon
     private readonly string[] _allOutlets;
 
     private int _currentSessionId;
-    private DateTime _lastHarvestTime = new(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
+    private DateTime _lastHarvestTime;
     private DateTime _lastGarbageCollectionTime = DateTime.Now;
 
     private int AnswerToLifeUniverseAndEveryThing() => 42;
     private int GetHash() => GetHashCode();
     private readonly string _header;
     private string ThreadedHeader => $"{_header}:{Environment.CurrentManagedThreadId}";
+
+    public DateTime GetNextHarvestTime()
+    {
+        lock (this)
+        {
+            return _lastHarvestTime + _settings.HarvestInterval;
+        }
+    }
     
     private async Task GetLastEpochFromDb()
     {
@@ -76,10 +84,13 @@ public class NewstalkerPostgresConductor : AbstractDaemon
         try
         {
             var coll = await db.TryMappedQuery<DateTimeStruct>(
-                "SELECT time_end AS Timestamp FROM scrape_sessions WHERE is_finished = true ORDER BY time_end DESC LIMIT 1;");
+                "SELECT time_initialized AS Timestamp FROM scrape_sessions WHERE is_finished = true ORDER BY time_end DESC LIMIT 1;");
             var list = coll.ToList();
             if (list.Count == 0) return;
-            _lastHarvestTime = list[0].Timestamp;
+            lock (this)
+            {
+                _lastHarvestTime = list[0].Timestamp;
+            }
         }
         catch (Exception)
         {
@@ -89,6 +100,7 @@ public class NewstalkerPostgresConductor : AbstractDaemon
     
     public NewstalkerPostgresConductor(NewstalkerPostgresConductorSettings settings, LoggingServerDelegate[]? loggers = null)
     {
+        _lastHarvestTime = DateTime.Now - _settings.HarvestInterval;
         _settings = settings;
         _header = $"PostgresHarvestScheduler:{GetHash()}";
         _queryFactory = new FiniteObjectPool<PostgresProvider>(() => new(_settings.ConnectionSettings),
@@ -374,7 +386,7 @@ public class NewstalkerPostgresConductor : AbstractDaemon
                 var curr = await db.TryMappedQuery<IntegerStruct>(
                     "INSERT INTO scrape_sessions (time_initialized, time_end, is_finished) " +
                     "VALUES (@init, @end, false) RETURNING id AS IntegerValue;",
-                    new { init = DateTime.Now, end = _lastHarvestTime });
+                    new { init = DateTime.Now, end = DateTime.MaxValue });
                 _currentSessionId = curr.FirstOrDefault().IntegerValue;
             }
 
@@ -404,16 +416,16 @@ public class NewstalkerPostgresConductor : AbstractDaemon
             else await SequentialSync(articles, completionState);
             
             var commitTime = DateTime.Now;
-            lock (this)
-            {
-                _lastGarbageCollectionTime = commitTime;
-            }
+            
             var affected = await db.TryExecute(
                 "UPDATE scrape_sessions SET time_end = @end, is_finished = true " +
                 "WHERE id = @id;", new { end = commitTime, id = _currentSessionId });
             if (affected == 0) _logger.Write(ThreadedHeader, $"Could not commit session with ID: {_currentSessionId}",
                 LogSegment.LogSegmentType.Exception);
             _currentSessionId = 0;
+#pragma warning disable CS4014
+            GetLastEpochFromDb();
+#pragma warning restore CS4014
         }
         catch (Exception e)
         {
@@ -479,7 +491,7 @@ public class NewstalkerPostgresConductor : AbstractDaemon
         {
             if (DateTime.Now - _lastHarvestTime >= _settings.HarvestInterval)
             {
-                _lastHarvestTime = DateTime.Now.AddDays(1.0f);
+                _lastHarvestTime = DateTime.MaxValue - _settings.HarvestInterval;
                 RunHarvest();
             }
             if (DateTime.Now - _lastGarbageCollectionTime >= _settings.HarvestInterval)
