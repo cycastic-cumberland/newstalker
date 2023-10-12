@@ -19,12 +19,12 @@ public class AdministrativeController : ControllerBase
         return Ok("안녕하세요, 세계");
     }
 
-    [HttpGet("api_keys")]
+    [HttpGet("apikeys")]
     public async Task<IActionResult> GetAllApiKeyInfos()
     {
         return Ok((await ApiKeyServices.GetApiKeys()).ToArray());
     }
-    [HttpGet("api_key")]
+    [HttpGet("apikey")]
     public async Task<IActionResult> GetApiKeyInfo(string key)
     {
         try
@@ -36,30 +36,30 @@ public class AdministrativeController : ControllerBase
             return NotFound();
         }
     }
-    [HttpPut("api_key")]
+    [HttpPut("apikey")]
     public async Task<IActionResult> CreateApiKey(int permissionCode)
     {
         return Ok(await ApiKeyServices.CreateApiKey(permissionCode));
     }
-    [HttpPatch("api_key")]
+    [HttpPatch("apikey")]
     public async Task<IActionResult> ModifyApiKeyPermission(string apiKey, int permissionCode)
     {
         await ApiKeyServices.ModifyApiKey(apiKey, permissionCode);
         return Ok();
     }
-    [HttpDelete("api_key")]
+    [HttpDelete("apikey")]
     public async Task<IActionResult> DeleteApiKey(string apiKey)
     {
         return await ApiKeyServices.DeleteApiKey(apiKey) ? Ok() : StatusCode(500, "Failed to delete API key");
     }
-    [HttpPost("db/init_core")]
+    [HttpPost("db/init-core")]
     public async Task<IActionResult> InitializeCoreTables()
     {
         await using var db = new PostgresProvider(NewstalkerCore.NewstalkerCore.PostgresConnection);
         await Initializer.InitializeCoreTables(db);
         return Ok();
     }
-    [HttpPost("db/init_administrative")]
+    [HttpPost("db/init-administrative")]
     public async Task<IActionResult> InitializeAdministrativeTables()
     {
         await using var db = new PostgresProvider(NewstalkerCore.NewstalkerCore.PostgresConnection);
@@ -67,7 +67,7 @@ public class AdministrativeController : ControllerBase
         return Ok();
     }
 
-    [HttpPost("db/run_gc")]
+    [HttpPost("db/run-gc")]
     public async Task<IActionResult> RunGarbageCollection()
     {
         var conductor = NewstalkerCore.NewstalkerCore.ActiveDaemon.Get("conductor") as NewstalkerPostgresConductor;
@@ -77,7 +77,7 @@ public class AdministrativeController : ControllerBase
         return Ok($"Affected row(s): {affected}");
     }
 
-    [HttpGet("logs")]
+    [HttpGet("logs/by-span")]
     public async Task<IActionResult> GetLogs(DateTime timeFrom, DateTime timeTo, 
         int mask = (int)LogSegment.LogSegmentType.Message & (int)LogSegment.LogSegmentType.Exception, uint limit = 100)
     {
@@ -85,7 +85,7 @@ public class AdministrativeController : ControllerBase
         return Ok(ret.Select(o => o.Convert())
             .ToDictionary(o => o.Timestamp, o => $"[{(int)o.LogType}] {o.Header}: {o.Message}"));
     }
-    [HttpGet("logs")]
+    [HttpGet("logs/latest")]
     public async Task<IActionResult> GetLogs(int mask = (int)LogSegment.LogSegmentType.Message 
                                                         & (int)LogSegment.LogSegmentType.Exception, uint limit = 100)
     {
@@ -93,7 +93,7 @@ public class AdministrativeController : ControllerBase
         return Ok(ret.Select(o => o.Convert())
             .ToDictionary(o => o.Timestamp, o => $"[{(int)o.LogType}] {o.Header}: {o.Message}"));
     }
-    [HttpGet("logs")]
+    [HttpGet("logs/by-latest-span")]
     public async Task<IActionResult> GetLogs(TimeSpan span,
         int mask = (int)LogSegment.LogSegmentType.Message & (int)LogSegment.LogSegmentType.Exception, uint limit = 100)
     {
