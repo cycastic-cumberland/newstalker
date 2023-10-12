@@ -64,7 +64,7 @@ public class PostgresLogger : LoggingServerDelegate
         await _provider.TryExecute($"INSERT INTO {_tableName} (timestamp, header, message, log_type, metadata) " +
                                    "VALUES (@time, @header, @msg, @type, @meta);",
             new {
-                time = new DateTimeOffset(log.Timestamp.ToUniversalTime()).ToUnixTimeMilliseconds(),
+                time = log.Timestamp,
                 header = log.Header,
                 msg = log.Message,
                 type = (int)log.LogType,
@@ -81,11 +81,11 @@ public class PostgresLogger : LoggingServerDelegate
     public async Task<IEnumerable<PostgresLogSegment>> GetLogs(DateTime timeFrom, DateTime timeTo, int typeFilter, uint limit)
     {
         return await _provider.TryMappedQuery<PostgresLogSegment>(
-            "SELECT * FROM stalker_logs " +
+            $"SELECT * FROM {_tableName} " +
             "WHERE timestamp > @timeFrom AND " +
             "timestamp <= @timeTo AND " +
             "log_type & @mask != 0 ORDER BY timestamp DESC LIMIT @limit;",
-            new { timeFrom = timeFrom.ToUnixMilliseconds(), timeTo = timeTo.ToUnixMilliseconds(),
+            new { timeFrom, timeTo,
                 mask = typeFilter, limit = (int)limit });
     }
 

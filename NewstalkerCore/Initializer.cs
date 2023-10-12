@@ -11,7 +11,7 @@ create table if not exists stalker_logs
     id        bigserial
         constraint stalker_logs_pk
             primary key,
-    timestamp bigint,
+    timestamp timestamp with time zone,
     header    varchar(128),
     message   varchar(256),
     log_type  integer,

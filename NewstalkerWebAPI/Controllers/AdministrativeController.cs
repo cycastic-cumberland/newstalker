@@ -83,7 +83,7 @@ public class AdministrativeController : ControllerBase
     {
         var ret = await NewstalkerCore.NewstalkerCore.GetLogs(timeFrom, timeTo, mask, limit);
         return Ok(ret.Select(o => o.Convert())
-            .ToDictionary(o => o.Timestamp, o => $"[{(int)o.LogType}] {o.Header}: {o.Message}"));
+            .ToDictionary(o => $"[{o.Timestamp} Type:{(int)o.LogType}]", o => $"{o.Header}: {o.Message}"));
     }
     [HttpGet("logs/latest")]
     public async Task<IActionResult> GetLogs(int mask = (int)LogSegment.LogSegmentType.Message 
@@ -91,7 +91,7 @@ public class AdministrativeController : ControllerBase
     {
         var ret = await NewstalkerCore.NewstalkerCore.GetLogs(mask, limit);
         return Ok(ret.Select(o => o.Convert())
-            .ToDictionary(o => o.Timestamp, o => $"[{(int)o.LogType}] {o.Header}: {o.Message}"));
+            .ToDictionary(o => $"[{o.Timestamp} :{(int)o.LogType}]", o => $"{o.Header}: {o.Message}"));
     }
     [HttpGet("logs/by-latest-span")]
     public async Task<IActionResult> GetLogs(uint seconds,
@@ -101,6 +101,6 @@ public class AdministrativeController : ControllerBase
         var ret = await NewstalkerCore.NewstalkerCore.GetLogs(now - TimeSpan.FromSeconds(seconds), now,
             mask, limit);
         return Ok(ret.Select(o => o.Convert())
-            .ToDictionary(o => o.Timestamp, o => $"[{(int)o.LogType}] {o.Header}: {o.Message}"));
+            .ToDictionary(o => $"[{o.Timestamp} :{(int)o.LogType}]", o => $"{o.Header}: {o.Message}"));
     }
 }
