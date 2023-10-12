@@ -94,11 +94,11 @@ public class AdministrativeController : ControllerBase
             .ToDictionary(o => o.Timestamp, o => $"[{(int)o.LogType}] {o.Header}: {o.Message}"));
     }
     [HttpGet("logs/by-latest-span")]
-    public async Task<IActionResult> GetLogs(TimeSpan span,
+    public async Task<IActionResult> GetLogs(uint seconds,
         int mask = (int)LogSegment.LogSegmentType.Message & (int)LogSegment.LogSegmentType.Exception, uint limit = 100)
     {
         var now = DateTime.Now;
-        var ret = await NewstalkerCore.NewstalkerCore.GetLogs(now - span, now,
+        var ret = await NewstalkerCore.NewstalkerCore.GetLogs(now - TimeSpan.FromSeconds(seconds), now,
             mask, limit);
         return Ok(ret.Select(o => o.Convert())
             .ToDictionary(o => o.Timestamp, o => $"[{(int)o.LogType}] {o.Header}: {o.Message}"));

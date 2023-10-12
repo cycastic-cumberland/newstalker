@@ -86,7 +86,7 @@ public class PostgresLogger : LoggingServerDelegate
             "timestamp <= @timeTo AND " +
             "log_type & @mask != 0 ORDER BY timestamp DESC LIMIT @limit;",
             new { timeFrom = timeFrom.ToUnixMilliseconds(), timeTo = timeTo.ToUnixMilliseconds(),
-                mask = typeFilter, limit });
+                mask = typeFilter, limit = (int)limit });
     }
 
     public Task<IEnumerable<PostgresLogSegment>> GetLogs(int typeFilter, uint limit)
