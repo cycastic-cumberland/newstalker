@@ -34,6 +34,9 @@ public abstract class StandardizedScrapperBasedOutlet : AbstractNewsOutlet
             return url + '/';
         }
     }
+
+    public override bool BelongsToThisOutlet(string url)
+        => url.StartsWith(GetBaseUrl());
     protected abstract TextProcessing.TextExtractionOptions GetContentScrappingOptions();
 
     protected StandardizedScrapperBasedOutlet(OutletSettings? settings = null)
@@ -131,7 +134,8 @@ public abstract class StandardizedScrapperBasedOutlet : AbstractNewsOutlet
             {
                 try
                 {
-                    var (text, wordCount) = await TextProcessing.ExtractAllSubText(doc, GetContentClass(), GetContentScrappingOptions());
+                    var (text, wordCount) = await TextProcessing.ExtractAllSubText(doc, GetContentClass(), 
+                        GetContentScrappingOptions());
                     contentText = text.Trim();
                     totalWordCount = wordCount;
                 }

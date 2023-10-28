@@ -1,13 +1,12 @@
-using System.Text;
-using System.Text.RegularExpressions;
 using ExtendedComponents;
 using NewstalkerExtendedComponents;
+using NewstalkerPostgresGrader;
 using Npgsql;
 using PostgresDriver;
 
-namespace NewstalkerPostgresGrader;
+namespace NewstalkerCore;
 
-public struct NewstalkerPostgresConductorSettings
+public struct StandardConductorSettings
 {
     public StandardizedHarvesterSettings HarvesterSettings;
     public PostgresConnectionSettings ConnectionSettings;
@@ -23,24 +22,17 @@ public struct NewstalkerPostgresConductorSettings
     public bool UseDualSyncMode;
 }
 
-public struct ScrapeSession
+public class StandardConductor : AbstractDaemon, INewstalkerConductor
 {
-    public DateTime StartTime { get; set; }
-    public DateTime ConclusionTime { get; set; }
-    public bool IsFinished { get; set; }
-}
-
-public class NewstalkerPostgresConductor : AbstractDaemon
-{
-    private struct IntegerStruct
+    protected struct IntegerStruct
     {
         public int IntegerValue;
     }
-    private struct CountStruct
+    protected struct CountStruct
     {
         public long Count;
     }
-    private struct DateTimeStruct
+    protected struct DateTimeStruct
     {
         public DateTime Timestamp;
     }
@@ -48,18 +40,19 @@ public class NewstalkerPostgresConductor : AbstractDaemon
     public const double StandardTagsWeight = 0.07132897;
     
     
-    private readonly NewstalkerPostgresConductorSettings _settings;
-    private readonly LoggingServer _logger = new();
-    private readonly ObjectPool<PostgresProvider> _queryFactory;
-    private readonly ObjectPool<int> _extractorChoker;
-    private readonly ObjectPool<int> _summarizerChoker;
-    private readonly StandardizedHarvester _harvester;
-    private readonly DelegatedSummarizer _summarizer;
-    private readonly PostgresGrader _grader;
-    private readonly AutoLoggerFactory _loggerFactory;
-    private readonly string[] _allOutlets;
+    protected readonly StandardConductorSettings Settings;
+    protected readonly LoggingServer Logger = new();
+    protected readonly ObjectPool<PostgresProvider> QueryFactory;
+    protected readonly ObjectPool<int> ExtractorChoker;
+    protected readonly ObjectPool<int> SummarizerChoker;
+    protected readonly StandardizedHarvester Harvester;
+    protected readonly DelegatedSummarizer Summarizer;
+    protected readonly PostgresGrader Grader;
+    protected readonly AutoLoggerFactory LoggerFactory;
+    protected readonly string[] AllOutlets;
 
-    private int _currentSessionId;
+    protected int SessionId { get; set; }
+
     private DateTime _lastHarvestTime;
     private DateTime _lastGarbageCollectionTime = DateTime.Now;
 
@@ -72,13 +65,13 @@ public class NewstalkerPostgresConductor : AbstractDaemon
     {
         lock (this)
         {
-            return _lastHarvestTime + _settings.HarvestInterval;
+            return _lastHarvestTime + Settings.HarvestInterval;
         }
     }
     
     private async Task GetLastEpochFromDb()
     {
-        using var queryWrapper = _queryFactory.Borrow();
+        using var queryWrapper = QueryFactory.Borrow();
         var db = queryWrapper.GetInstance();
 
         try
@@ -98,67 +91,67 @@ public class NewstalkerPostgresConductor : AbstractDaemon
         }
     }
     
-    public NewstalkerPostgresConductor(NewstalkerPostgresConductorSettings settings, LoggingServerDelegate[]? loggers = null)
+    public StandardConductor(StandardConductorSettings settings, LoggingServerDelegate[]? loggers = null)
     {
-        _lastHarvestTime = DateTime.Now - _settings.HarvestInterval;
-        _settings = settings;
+        Settings = settings;
+        _lastHarvestTime = DateTime.Now - settings.HarvestInterval;
         _header = $"PostgresHarvestScheduler:{GetHash()}";
-        _queryFactory = new FiniteObjectPool<PostgresProvider>(() => new(_settings.ConnectionSettings),
+        QueryFactory = new FiniteObjectPool<PostgresProvider>(() => new(Settings.ConnectionSettings),
             settings.PostgresConnectionsLimit == 0 ? 64 : settings.PostgresConnectionsLimit);
-        _extractorChoker = new FiniteObjectPool<int>(AnswerToLifeUniverseAndEveryThing,
+        ExtractorChoker = new FiniteObjectPool<int>(AnswerToLifeUniverseAndEveryThing,
             settings.ExtractorConnectionsLimit == 0 ? 16 : settings.ExtractorConnectionsLimit);
         var summarizerConnectionLimit = settings.SummarizerConnectionsLimit;
         var summarizerMode = summarizerConnectionLimit == 0 ? " (Shared)" : "";
-        _summarizerChoker = summarizerConnectionLimit == 0 ? _extractorChoker : new FiniteObjectPool<int>(AnswerToLifeUniverseAndEveryThing,
+        SummarizerChoker = summarizerConnectionLimit == 0 ? ExtractorChoker : new FiniteObjectPool<int>(AnswerToLifeUniverseAndEveryThing,
             summarizerConnectionLimit);
         if (loggers != null)
         {
             foreach (var logger in loggers)
-                _logger.EnrollDelegate(logger);
+                Logger.EnrollDelegate(logger);
         }
 
-        _allOutlets = (from pair in settings.Outlets select pair.Value.GetBaseUrl()).ToArray();
+        AllOutlets = (from pair in settings.Outlets select pair.Value.GetBaseUrl()).ToArray();
         var graderSettings = settings.GraderSettings;
         if (graderSettings.TagsWeight <= 0.0 ||
             graderSettings.TagsWeight >= 1.0) graderSettings.TagsWeight = StandardTagsWeight;
         GetLastEpochFromDb().Wait();
-        _loggerFactory = new("PostgresHarvestScheduler", _logger);
-        _harvester = new(_settings.HarvesterSettings, _settings.Outlets, _logger);
-        _summarizer = new(_settings.SummarizerSettings, _logger);
-        _grader = new(_queryFactory, graderSettings, _logger);
+        LoggerFactory = new("PostgresHarvestScheduler", Logger);
+        Harvester = new(Settings.HarvesterSettings, Settings.Outlets, Logger);
+        Summarizer = new(Settings.SummarizerSettings, Logger);
+        Grader = new(QueryFactory, graderSettings, Logger);
         RunGarbageCollection();
         StartIterator();
-        _logger.Write(_header, "PostgresHarvestScheduler online", LogSegment.LogSegmentType.Message);
-        _logger.Write(_header, $"Extractor limit: {((FiniteObjectPool<int>)_extractorChoker).Capacity}",
+        Logger.Write(_header, "PostgresHarvestScheduler online", LogSegment.LogSegmentType.Message);
+        Logger.Write(_header, $"Extractor limit: {((FiniteObjectPool<int>)ExtractorChoker).Capacity}",
             LogSegment.LogSegmentType.Message);
-        _logger.Write(_header, $"Summarizer limit: {((FiniteObjectPool<int>)_summarizerChoker).Capacity}" +
+        Logger.Write(_header, $"Summarizer limit: {((FiniteObjectPool<int>)SummarizerChoker).Capacity}" +
                                $"{summarizerMode}",
             LogSegment.LogSegmentType.Message);
     }
     public override void Dispose()
     {
         base.Dispose();
-        _queryFactory.Dispose();
-        _grader.Dispose();
-        _summarizer.Dispose();
-        _harvester.Dispose();
-        _logger.Dispose();
+        QueryFactory.Dispose();
+        Grader.Dispose();
+        Summarizer.Dispose();
+        Harvester.Dispose();
+        Logger.Dispose();
         GC.SuppressFinalize(this);
     }
 
     public override void CloseDaemon()
     {
         base.CloseDaemon();
-        _queryFactory.Dispose();
-        _harvester.Dispose();
-        _logger.Dispose();
+        QueryFactory.Dispose();
+        Harvester.Dispose();
+        Logger.Dispose();
     }
 
-    private async Task<bool> InsertArticle(AbstractNewsOutlet.ArticleScrapeResult result)
+    protected async Task<bool> InsertArticle(AbstractNewsOutlet.ArticleScrapeResult result)
     {
         try
         {
-            using var wrapped = _queryFactory.Borrow();
+            using var wrapped = QueryFactory.Borrow();
             var db = wrapped.GetInstance();
             await db.OpenTransaction(async t =>
             {
@@ -185,23 +178,23 @@ public class NewstalkerPostgresConductor : AbstractDaemon
         catch (PostgresException e)
         {
             if (e.SqlState != "23505")
-                _logger.Write(ThreadedHeader, "Exception thrown in InsertArticle",
+                Logger.Write(ThreadedHeader, "Exception thrown in InsertArticle",
                     LogSegment.LogSegmentType.Exception, e.ToString());
         }
         catch (Exception e)
         {
-            _logger.Write(ThreadedHeader, "Exception thrown in InsertArticle",
+            Logger.Write(ThreadedHeader, "Exception thrown in InsertArticle",
                 LogSegment.LogSegmentType.Exception, e.ToString());
         }
         return false;
     }
 
     public async Task<string> SummarizeArticle(AbstractNewsOutlet.ArticleScrapeResult article)
-        =>  await _summarizer.SummarizeArticleAsync(article);
+        =>  await Summarizer.SummarizeArticleAsync(article);
     
-    private async Task<bool> SummarizeAndSaveArticle(AbstractNewsOutlet.ArticleScrapeResult article)
+    protected async Task<bool> SummarizeAndSaveArticle(AbstractNewsOutlet.ArticleScrapeResult article)
     {
-        using var wrapped = _queryFactory.Borrow();
+        using var wrapped = QueryFactory.Borrow();
         var db = wrapped.GetInstance();
         try
         {
@@ -213,7 +206,7 @@ public class NewstalkerPostgresConductor : AbstractDaemon
         }
         catch (Exception e)
         {
-            _logger.Write(ThreadedHeader, "Exception thrown in SummarizeArticle",
+            Logger.Write(ThreadedHeader, "Exception thrown in SummarizeArticle",
                 LogSegment.LogSegmentType.Exception, e.ToString());
         }
 
@@ -221,13 +214,13 @@ public class NewstalkerPostgresConductor : AbstractDaemon
     }
 
     public async Task<Dictionary<string, double>> ExtractTopics(AbstractNewsOutlet.ArticleScrapeResult article)
-        => await _summarizer.ExtractTopicsAsync(article);
+        => await Summarizer.ExtractTopicsAsync(article);
     
-    private async Task<bool> ExtractAndSaveTopics(AbstractNewsOutlet.ArticleScrapeResult article)
+    protected async Task<bool> ExtractAndSaveTopics(AbstractNewsOutlet.ArticleScrapeResult article)
     {
         var charsToRemove = new char[] { '!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '-', '_', '=', '+', '~',
             '`', '{', '[', '}', ']', '\\', '|', ';', ':', '\"', '\'', '<', ',', '>', '.', '?', '/' };
-        using var wrapped = _queryFactory.Borrow();
+        using var wrapped = QueryFactory.Borrow();
         var db = wrapped.GetInstance();
         // var epoch = DateTimeOffset.Now.ToUnixTimeMilliseconds();
         var ret = true;
@@ -239,7 +232,7 @@ public class NewstalkerPostgresConductor : AbstractDaemon
                 var cleansedKw = new string((from c in topic where !charsToRemove.Contains(c) select c).ToArray()).Trim();
                 if (cleansedKw.Length == 0)
                 {
-                    _logger.Write(ThreadedHeader, "Topic contains all special characters and will be skipped",
+                    Logger.Write(ThreadedHeader, "Topic contains all special characters and will be skipped",
                         LogSegment.LogSegmentType.Message);
                     continue;
                 }
@@ -258,7 +251,7 @@ public class NewstalkerPostgresConductor : AbstractDaemon
                     }
                     catch (Exception e)
                     {
-                        _logger.Write(ThreadedHeader, "Exception thrown in ExtractTopics/@OpenTransaction",
+                        Logger.Write(ThreadedHeader, "Exception thrown in ExtractTopics/@OpenTransaction",
                             LogSegment.LogSegmentType.Exception, e.ToString());
                         t.RollBack();
                         ret = false;
@@ -268,23 +261,23 @@ public class NewstalkerPostgresConductor : AbstractDaemon
         }
         catch (Exception e)
         {
-            _logger.Write(ThreadedHeader, "Exception thrown in ExtractTopics",
+            Logger.Write(ThreadedHeader, "Exception thrown in ExtractTopics",
                 LogSegment.LogSegmentType.Exception, e.ToString());
         }
 
         return ret;
     }
 
-    private static T Passthrough<T>(Func<T> func) => func();
+    protected static T Passthrough<T>(Func<T> func) => func();
 
-    private async Task<T> TimedOffload<T>(Func<Task<T>> task, ObjectPool<int>? choker, string funcName, int taskNo, int totalTask, string content)
+    protected async Task<T> TimedOffload<T>(Func<Task<T>> task, ObjectPool<int>? choker, string funcName, int taskNo, int totalTask, string content)
     {
         using var unused = choker?.Borrow();
-        _logger.Write(ThreadedHeader, $"[{taskNo}/{totalTask}] {funcName} starting",
+        Logger.Write(ThreadedHeader, $"[{taskNo}/{totalTask}] {funcName} starting",
             LogSegment.LogSegmentType.Message, content);
         var epoch = DateTimeOffset.Now.ToUnixTimeMilliseconds();
         var ret = await task();
-        _logger.Write(ThreadedHeader, $"[{taskNo}/{totalTask}] {funcName} finished " +
+        Logger.Write(ThreadedHeader, $"[{taskNo}/{totalTask}] {funcName} finished " +
                                       $"in {DateTimeOffset.Now.ToUnixTimeMilliseconds() - epoch} ms",
             LogSegment.LogSegmentType.Message, content);
         return ret;
@@ -292,8 +285,8 @@ public class NewstalkerPostgresConductor : AbstractDaemon
 
     private async Task DualSync(AbstractNewsOutlet.ArticleScrapeResult[] articles, bool[] completionState)
     {
-        using var unused1 = _loggerFactory.Create("RunHarvestAsync/@ExtractAndSaveTopics");
-        using var unused2 = _loggerFactory.Create("RunHarvestAsync/@SummarizeAndSaveArticle");
+        using var unused1 = LoggerFactory.Create("RunHarvestAsync/@ExtractAndSaveTopics");
+        using var unused2 = LoggerFactory.Create("RunHarvestAsync/@SummarizeAndSaveArticle");
         var extractCount = 0;
         var summarizeCount = 0;
         var analyzeTasks = (from article in articles
@@ -303,10 +296,10 @@ public class NewstalkerPostgresConductor : AbstractDaemon
                 {
                     var currExtract = ++extractCount;
                     var currSummarize = ++summarizeCount;
-                    _logger.Write(ThreadedHeader,
+                    Logger.Write(ThreadedHeader,
                         $"[{currExtract}/{articles.Length}] {nameof(ExtractAndSaveTopics)} skipped " +
                         "due to synchronization failure", LogSegment.LogSegmentType.Message);
-                    _logger.Write(ThreadedHeader,
+                    Logger.Write(ThreadedHeader,
                         $"[{currSummarize}/{articles.Length}] {nameof(SummarizeAndSaveArticle)} skipped " +
                         "due to synchronization failure", LogSegment.LogSegmentType.Message);
                     return new[] { Task.FromResult(false), Task.FromResult(false) };
@@ -317,16 +310,16 @@ public class NewstalkerPostgresConductor : AbstractDaemon
                     var currSummarize = ++summarizeCount;
                     return new[]
                     {
-                        TimedOffload(() => ExtractAndSaveTopics(article), _extractorChoker, nameof(ExtractAndSaveTopics),
+                        TimedOffload(() => ExtractAndSaveTopics(article), ExtractorChoker, nameof(ExtractAndSaveTopics),
                             currExtract, articles.Length, article.Url),
-                        TimedOffload(() => SummarizeAndSaveArticle(article), _summarizerChoker, nameof(SummarizeAndSaveArticle),
+                        TimedOffload(() => SummarizeAndSaveArticle(article), SummarizerChoker, nameof(SummarizeAndSaveArticle),
                             currSummarize, articles.Length, article.Url)
                     };
                 }
             })).SelectMany(o => o);
         var syncResults = await Task.WhenAll(analyzeTasks);
         var completed = from result in syncResults where result select result;
-        _logger.Write(ThreadedHeader, "ExtractAndSaveTopics and SummarizeAndSaveArticle completed: " +
+        Logger.Write(ThreadedHeader, "ExtractAndSaveTopics and SummarizeAndSaveArticle completed: " +
                                       $"{completed.Count()}/{syncResults.Length}",
             LogSegment.LogSegmentType.Message);
     }
@@ -334,73 +327,94 @@ public class NewstalkerPostgresConductor : AbstractDaemon
     private async Task SequentialSync(AbstractNewsOutlet.ArticleScrapeResult[] articles, bool[] completionState)
     {
         {
-            using var unused1 = _loggerFactory.Create("RunHarvestAsync/@ExtractAndSaveTopics");
+            using var unused1 = LoggerFactory.Create("RunHarvestAsync/@ExtractAndSaveTopics");
             var extractCount = 0;
             var extractionTasks = from article in articles select Passthrough(() =>
             {
                 var currExtract = ++extractCount;
                 if (completionState[extractCount - 1])
-                    return TimedOffload(() => ExtractAndSaveTopics(article), _extractorChoker, nameof(ExtractAndSaveTopics),
+                    return TimedOffload(() => ExtractAndSaveTopics(article), ExtractorChoker, nameof(ExtractAndSaveTopics),
                         currExtract, articles.Length, article.Url);
-                _logger.Write(ThreadedHeader,
+                Logger.Write(ThreadedHeader,
                     $"[{currExtract}/{articles.Length}] {nameof(ExtractAndSaveTopics)} skipped " +
                     "due to synchronization failure", LogSegment.LogSegmentType.Message);
                 return Task.FromResult(false);
             });
             var syncResults = await Task.WhenAll(extractionTasks);
             var completed = from result in syncResults where result select result;
-            _logger.Write(ThreadedHeader, $"{nameof(ExtractAndSaveTopics)} completed: " +
+            Logger.Write(ThreadedHeader, $"{nameof(ExtractAndSaveTopics)} completed: " +
                                           $"{completed.Count()}/{syncResults.Length}",
                 LogSegment.LogSegmentType.Message);
         }
         {
-            using var unused2 = _loggerFactory.Create("RunHarvestAsync/@SummarizeAndSaveArticle");
+            using var unused2 = LoggerFactory.Create("RunHarvestAsync/@SummarizeAndSaveArticle");
             var summarizeCount = 0;
             var summarizationTasks = from article in articles select Passthrough(() =>
             {
                 var currExtract = ++summarizeCount;
                 if (completionState[summarizeCount - 1])
-                    return TimedOffload(() => SummarizeAndSaveArticle(article), _summarizerChoker, nameof(SummarizeAndSaveArticle),
+                    return TimedOffload(() => SummarizeAndSaveArticle(article), SummarizerChoker, nameof(SummarizeAndSaveArticle),
                         currExtract, articles.Length, article.Url);
-                _logger.Write(ThreadedHeader,
+                Logger.Write(ThreadedHeader,
                     $"[{summarizeCount}/{articles.Length}] {nameof(SummarizeAndSaveArticle)} skipped " +
                     "due to synchronization failure", LogSegment.LogSegmentType.Message);
                 return Task.FromResult(false);
             });
             var syncResults = await Task.WhenAll(summarizationTasks);
             var completed = from result in syncResults where result select result;
-            _logger.Write(ThreadedHeader, $"{nameof(SummarizeAndSaveArticle)} completed: " +
+            Logger.Write(ThreadedHeader, $"{nameof(SummarizeAndSaveArticle)} completed: " +
                                           $"{completed.Count()}/{syncResults.Length}",
                 LogSegment.LogSegmentType.Message);
         }
     }
+
+    protected async Task CreateSession()
+    {
+        using var wrapped = QueryFactory.Borrow();
+        var db = wrapped.GetInstance();
+        var curr = await db.TryMappedQuery<IntegerStruct>(
+            "INSERT INTO scrape_sessions (time_initialized, time_end, is_finished) " +
+            "VALUES (@init, @end, false) RETURNING id AS IntegerValue;",
+            new { init = DateTime.Now, end = DateTime.MaxValue });
+        SessionId = curr.FirstOrDefault().IntegerValue;
+    }
+
+    protected async Task CommitSession()
+    {
+        using var wrapped = QueryFactory.Borrow();
+        var db = wrapped.GetInstance();
+        var commitTime = DateTime.Now;
+            
+        var affected = await db.TryExecute(
+            "UPDATE scrape_sessions SET time_end = @end, is_finished = true " +
+            "WHERE id = @id;", new { end = commitTime, id = SessionId });
+        if (affected == 0) Logger.Write(ThreadedHeader, $"Could not commit session with ID: {SessionId}",
+            LogSegment.LogSegmentType.Exception);
+        SessionId = 0;
+        lock (this)
+        {
+            _lastHarvestTime = commitTime;
+        }
+    }
     
-    private async Task RunHarvestAsync()
+    protected virtual async Task RunHarvestAsync()
     {
         try
         {
-            using var unused = _loggerFactory.Create("RunHarvestAsync");
-            using var wrapped = _queryFactory.Borrow();
-            var db = wrapped.GetInstance();
-            {
-                var curr = await db.TryMappedQuery<IntegerStruct>(
-                    "INSERT INTO scrape_sessions (time_initialized, time_end, is_finished) " +
-                    "VALUES (@init, @end, false) RETURNING id AS IntegerValue;",
-                    new { init = DateTime.Now, end = DateTime.MaxValue });
-                _currentSessionId = curr.FirstOrDefault().IntegerValue;
-            }
+            using var unused = LoggerFactory.Create("RunHarvestAsync");
+            await CreateSession();
 
             IEnumerable<AbstractNewsOutlet.ArticleScrapeResult>[] results; 
             {
-                using var aggregationLogger = _loggerFactory.Create("RunHarvestAsync/@AggregateFrontpage");
-                results = await Task.WhenAll(from pair in _settings.Outlets
-                    select Task.Run(async () => await _harvester.AggregateFrontpage(pair.Value, _settings.DefaultQueryOption)));
+                using var aggregationLogger = LoggerFactory.Create("RunHarvestAsync/@AggregateFrontpage");
+                results = await Task.WhenAll(from pair in Settings.Outlets
+                    select Task.Run(async () => await Harvester.AggregateFrontpage(pair.Value, Settings.DefaultQueryOption)));
             }
 
             var articles = results.SelectMany(o => o).ToArray();
             bool[] completionState;
             {
-                using var unused1 = _loggerFactory.Create("RunHarvestAsync/@InsertArticle");
+                using var unused1 = LoggerFactory.Create("RunHarvestAsync/@InsertArticle");
                 var insertCount = 0;
                 var syncTasks = from article in articles
                     select Passthrough(() =>
@@ -411,37 +425,30 @@ public class NewstalkerPostgresConductor : AbstractDaemon
                     });
                 completionState = await Task.WhenAll(syncTasks);
             }
-            if (_settings.UseDualSyncMode)
+            if (Settings.UseDualSyncMode)
                 await DualSync(articles, completionState);
             else await SequentialSync(articles, completionState);
-            
-            var commitTime = DateTime.Now;
-            
-            var affected = await db.TryExecute(
-                "UPDATE scrape_sessions SET time_end = @end, is_finished = true " +
-                "WHERE id = @id;", new { end = commitTime, id = _currentSessionId });
-            if (affected == 0) _logger.Write(ThreadedHeader, $"Could not commit session with ID: {_currentSessionId}",
-                LogSegment.LogSegmentType.Exception);
-            _currentSessionId = 0;
+
+            await CommitSession();
 #pragma warning disable CS4014
             GetLastEpochFromDb();
 #pragma warning restore CS4014
         }
         catch (Exception e)
         {
-            _logger.Write(ThreadedHeader, "Exception during commit in RunHarvestAsync",
+            Logger.Write(ThreadedHeader, "Exception during commit in RunHarvestAsync",
                 LogSegment.LogSegmentType.Exception, e.ToString());
         }
     }
 
     public async Task<int> RunGarbageCollectionAsync()
     {
-        using var unused = _loggerFactory.Create("RunGarbageCollectionAsync");
+        using var unused = LoggerFactory.Create("RunGarbageCollectionAsync");
         var affected = 0;
         try
         {
-            var threshold = DateTime.Now - _settings.GarbageCollectionInterval;
-            using var wrapped = _queryFactory.Borrow();
+            var threshold = DateTime.Now - Settings.GarbageCollectionInterval;
+            using var wrapped = QueryFactory.Borrow();
             var db = wrapped.GetInstance();
 
             affected = await db.TryExecute("DELETE FROM tags_used WHERE article_url IN " +
@@ -456,11 +463,11 @@ public class NewstalkerPostgresConductor : AbstractDaemon
                                                "DELETE FROM scrape_results WHERE time_posted < @time",
                 new { time = threshold });
             if (affected > 0)
-                _logger.Write(ThreadedHeader, $"Garbage collected, affected rows: {affected}", LogSegment.LogSegmentType.Message);
+                Logger.Write(ThreadedHeader, $"Garbage collected, affected rows: {affected}", LogSegment.LogSegmentType.Message);
         }
         catch (Exception e)
         {
-            _logger.Write(ThreadedHeader, "Exception thrown in RunGarbageCollectionAsync",
+            Logger.Write(ThreadedHeader, "Exception thrown in RunGarbageCollectionAsync",
                 LogSegment.LogSegmentType.Exception, e.ToString());
         }
         lock (this)
@@ -489,12 +496,12 @@ public class NewstalkerPostgresConductor : AbstractDaemon
     {
         lock (this)
         {
-            if (DateTime.Now - _lastHarvestTime >= _settings.HarvestInterval)
+            if (DateTime.Now - _lastHarvestTime >= Settings.HarvestInterval)
             {
-                _lastHarvestTime = DateTime.MaxValue - _settings.HarvestInterval;
+                _lastHarvestTime = DateTime.MaxValue - Settings.HarvestInterval;
                 RunHarvest();
             }
-            if (DateTime.Now - _lastGarbageCollectionTime >= _settings.HarvestInterval)
+            if (DateTime.Now - _lastGarbageCollectionTime >= Settings.HarvestInterval)
             {
                 _lastGarbageCollectionTime = DateTime.MaxValue;;
                 RunGarbageCollection();
@@ -507,20 +514,20 @@ public class NewstalkerPostgresConductor : AbstractDaemon
     public Task<int> QueryAmountAsync(AbstractGrader.GraderSettings settings)
     {
         if (settings.OutletSelections == null! || settings.OutletSelections.Length == 0)
-            settings.OutletSelections = _allOutlets;
-        return _grader.QueryAmountAsync(settings);
+            settings.OutletSelections = AllOutlets;
+        return Grader.QueryAmountAsync(settings);
     }
     
     public Task<Dictionary<string, double>> GradeRelevancyAsync(AbstractGrader.GraderSettings settings)
     {
         if (settings.OutletSelections == null! || settings.OutletSelections.Length == 0)
-            settings.OutletSelections = _allOutlets;
-        return _grader.GradeRelevancyAsync(settings);
+            settings.OutletSelections = AllOutlets;
+        return Grader.GradeRelevancyAsync(settings);
     }
 
     public async Task<AbstractNewsOutlet.ArticleScrapeResult[]> QueryArticles(DateTime timeFrom, DateTime timeTo)
     {
-        using var wrapped = _queryFactory.Borrow();
+        using var wrapped = QueryFactory.Borrow();
         var db = wrapped.GetInstance();
         var article = await db.TryMappedQuery<AbstractNewsOutlet.ArticleScrapeResult>(
             "SELECT url AS Url," +
@@ -538,7 +545,7 @@ public class NewstalkerPostgresConductor : AbstractDaemon
 
     public async Task<AbstractNewsOutlet.ArticleScrapeResult?> QueryArticle(string articleUrl)
     {
-        using var wrapped = _queryFactory.Borrow();
+        using var wrapped = QueryFactory.Borrow();
         var db = wrapped.GetInstance();
         var article = (await db.TryMappedQuery<AbstractNewsOutlet.ArticleScrapeResult>(
             "SELECT url AS Url," +
@@ -555,7 +562,7 @@ public class NewstalkerPostgresConductor : AbstractDaemon
 
     public async Task<string[]> QueryArticleTags(string articleUrl)
     {
-        using var wrapped = _queryFactory.Borrow();
+        using var wrapped = QueryFactory.Borrow();
         var db = wrapped.GetInstance();
         var tags = (await db.TryMappedQuery<PostgresGrader.StringRepStruct>(
                 "SELECT tag AS StringRep " +
@@ -567,7 +574,7 @@ public class NewstalkerPostgresConductor : AbstractDaemon
     
     public async Task<Dictionary<string, double>> QueryArticleKeywords(string articleUrl)
     {
-        using var wrapped = _queryFactory.Borrow();
+        using var wrapped = QueryFactory.Borrow();
         var db = wrapped.GetInstance();
         var keywords = await db.TryMappedQuery<PostgresGrader.Topic>(
             "SELECT keyword AS TopicName, " +
@@ -579,7 +586,7 @@ public class NewstalkerPostgresConductor : AbstractDaemon
 
     public async Task<string> QuerySummarizedText(string articleUrl)
     {
-        using var wrapped = _queryFactory.Borrow();
+        using var wrapped = QueryFactory.Borrow();
         var db = wrapped.GetInstance();
         var summarized = (await db.TryMappedQuery<PostgresGrader.StringRepStruct>(
             "SELECT summarized_text AS StringRep " +
@@ -590,15 +597,15 @@ public class NewstalkerPostgresConductor : AbstractDaemon
 
     public async Task<IEnumerable<AbstractNewsOutlet.ArticleScrapeResult>> ImpromptuFrontPageScrape(string outletName)
     {
-        using var aggregationLogger = _loggerFactory.Create(nameof(ImpromptuFrontPageScrape));
+        using var aggregationLogger = LoggerFactory.Create(nameof(ImpromptuFrontPageScrape));
         var results = await Task.Run(async () =>
-            await _harvester.AggregateFrontpage(outletName, _settings.DefaultQueryOption));
+            await Harvester.AggregateFrontpage(outletName, Settings.DefaultQueryOption));
         return results;
     }
 
     public async Task<ScrapeSession> GetLatestSession()
     {
-        using var wrapped = _queryFactory.Borrow();
+        using var wrapped = QueryFactory.Borrow();
         var db = wrapped.GetInstance();
         var ret = (await db.TryMappedQuery<ScrapeSession>(
             "SELECT time_initialized AS StartTime, " +
@@ -612,7 +619,7 @@ public class NewstalkerPostgresConductor : AbstractDaemon
     
     public async Task<ScrapeSession> GetLatestSession(bool isFinished)
     {
-        using var wrapped = _queryFactory.Borrow();
+        using var wrapped = QueryFactory.Borrow();
         var db = wrapped.GetInstance();
         var ret = (await db.TryMappedQuery<ScrapeSession>(
             "SELECT time_initialized AS StartTime, " +
@@ -629,7 +636,7 @@ public class NewstalkerPostgresConductor : AbstractDaemon
     
     public async Task<IEnumerable<ScrapeSession>> GetSessions(DateTime timeFrom, DateTime timeTo)
     {
-        using var wrapped = _queryFactory.Borrow();
+        using var wrapped = QueryFactory.Borrow();
         var db = wrapped.GetInstance();
         var arr = await db.TryMappedQuery<ScrapeSession>(
             "SELECT time_initialized AS StartTime, " +
@@ -654,7 +661,7 @@ public class NewstalkerPostgresConductor : AbstractDaemon
     
     public async Task<IEnumerable<ScrapeSession>> GetSessions(DateTime timeFrom, DateTime timeTo, bool isFinished)
     {
-        using var wrapped = _queryFactory.Borrow();
+        using var wrapped = QueryFactory.Borrow();
         var db = wrapped.GetInstance();
         var arr = await db.TryMappedQuery<ScrapeSession>(
             "SELECT time_initialized AS StartTime, " +

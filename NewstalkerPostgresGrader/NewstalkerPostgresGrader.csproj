@@ -9,7 +9,6 @@
 
 
     <ItemGroup>
-      <ProjectReference Include="..\ExtendedComponents\ExtendedComponents.csproj" />
       <ProjectReference Include="..\NewstalkerExtendedComponents\NewstalkerExtendedComponents.csproj" />
       <ProjectReference Include="..\PostgresDriver\PostgresDriver.csproj" />
     </ItemGroup>

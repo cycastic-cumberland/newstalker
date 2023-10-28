@@ -54,7 +54,7 @@ public abstract class AbstractNewsOutlet : IDisposable
     public abstract Task<IEnumerable<string>> QueryFrontPageAsync(FrontPageQueryOptions options);
     public abstract Task<ArticleScrapeResult?> QueryArticleAsync(string url);
     public abstract Task<IEnumerable<CommentScrapeResult>> QueryCommentSectionAsync(string url);
-
+    public abstract bool BelongsToThisOutlet(string url);
     public IEnumerable<string> QueryFrontPage(FrontPageQueryOptions options)
     {
         var task = QueryFrontPageAsync(options);

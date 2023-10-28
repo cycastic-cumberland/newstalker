@@ -3,6 +3,7 @@ using ExtendedPostgresDriver;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NewstalkerCore;
+using NewstalkerExtendedComponents;
 using NewstalkerPostgresGrader;
 using NewstalkerWebAPI.Authority;
 using PostgresDriver;
@@ -71,7 +72,7 @@ public class AdministrativeController : ControllerBase
     [HttpPost("db/run-gc")]
     public async Task<IActionResult> RunGarbageCollection()
     {
-        var conductor = NewstalkerCore.NewstalkerCore.ActiveDaemon.Get("conductor") as NewstalkerPostgresConductor;
+        var conductor = NewstalkerCore.NewstalkerCore.ActiveDaemon.Get("conductor") as INewstalkerConductor;
         if (conductor == null)
             return StatusCode(503, "Conductor daemon is not running");
         var affected = await conductor.RunGarbageCollectionAsync();

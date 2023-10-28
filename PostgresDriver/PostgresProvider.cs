@@ -53,7 +53,7 @@ public class SshTunnelSettings
     }
     private static PrivateKeyFile ExtractPrivateKeyByContent(string privateKeyContent, string? passphrase)
     {
-        var stream = new MemoryStream(Encoding.UTF8.GetBytes(privateKeyContent));
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(privateKeyContent));
         if (passphrase != null) return new(stream, passphrase);
         return new(stream);
     }
@@ -62,10 +62,10 @@ public class SshTunnelSettings
         if (Password == null && PrivateKeyPath == null && PrivateKeyContent == null)
             throw new NullReferenceException("Either password or private key path must be provided");
         if (PrivateKeyContent != null)
-            return new(Host, Port, Username, ExtractPrivateKeyByContent(PrivateKeyContent, Password));
+            return new(Host, Port, Username, ExtractPrivateKeyByContent(PrivateKeyContent, Password ?? ""));
         if (PrivateKeyPath != null)
-            return new(Host, Port, Username, ExtractPrivateKeyByPath(PrivateKeyPath, Password));
-        return new(Host, Port, Username, Password);
+            return new(Host, Port, Username, ExtractPrivateKeyByPath(PrivateKeyPath, Password ?? ""));
+        return new(Host, Port, Username, Password ?? "");
     }
 }
 
@@ -80,7 +80,7 @@ public class PostgresConnectionSettings
 
     public override string ToString()
     {
-        StringBuilder builder = new StringBuilder();
+        var builder = new StringBuilder();
         builder.Append($"Server={Address};");
         if (Port != 0) builder.Append($"Port={Port};");
         builder.Append($"Database={DatabaseName};Username={Username};");
@@ -179,7 +179,7 @@ public class PostgresTunnelWarehouse : IDisposable, IDaemon
 
 public class PostgresProvider : IDisposable, IAsyncDisposable
 {
-    private class InnerTransaction : ITransaction
+    private class InnerTransaction : ITransaction, IAsyncDisposable
     {
         private readonly PostgresProvider _provider;
         private readonly bool _isTopLevel;

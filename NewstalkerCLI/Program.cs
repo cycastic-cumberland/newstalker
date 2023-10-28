@@ -1,5 +1,4 @@
-﻿using NewstalkerCore;
-namespace NewstalkerCLI;
+﻿namespace NewstalkerCLI;
 
 public static class Program
 {

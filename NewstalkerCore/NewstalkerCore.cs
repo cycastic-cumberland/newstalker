@@ -95,7 +95,7 @@ public static class NewstalkerCore
         return tableName;
     }
 
-    private static async Task<NewstalkerPostgresConductorSettings> GetConductorSettings(
+    private static async Task<StandardConductorSettings> GetConductorSettings(
         PostgresConnectionSettings connectionSettings)
     {
         var gcInterval = Environment.GetEnvironmentVariable("NPC_GC_INTERVAL_HR");
@@ -156,7 +156,7 @@ public static class NewstalkerCore
             GraderSettings = new()
             {
                 TagsWeight = string.IsNullOrEmpty(tagsWeight)
-                    ? NewstalkerPostgresConductor.StandardTagsWeight
+                    ? StandardConductor.StandardTagsWeight
                     : double.Parse(tagsWeight)
             },
             PostgresConnectionsLimit = uint.Parse(pgChoker),
@@ -231,7 +231,7 @@ public static class NewstalkerCore
         ActiveDaemon.Manage("conductor", () =>
         {
             Console.WriteLine("Conductor daemon is now starting...");
-            return new NewstalkerPostgresConductor(conductorSettings,
+            return new StandardConductor(conductorSettings,
                 GetLoggers(_pgConnectionSettings, logTable));
         });
     }

@@ -17,8 +17,8 @@ public class QueryController : ControllerBase
         public long Count { get; set; }
     }
 
-    private static NewstalkerPostgresConductor Conductor
-        => ((NewstalkerPostgresConductor)NewstalkerCore.NewstalkerCore.ActiveDaemon.Get("conductor")!)!;
+    private static INewstalkerConductor Conductor
+        => ((INewstalkerConductor)NewstalkerCore.NewstalkerCore.ActiveDaemon.Get("conductor")!)!;
     
     [HttpGet("test")]
     public IActionResult Test()
@@ -87,7 +87,7 @@ public class QueryController : ControllerBase
     public async Task<IActionResult> QueryArticles(DateTime timeFrom, DateTime timeTo)
     {
         var ret = await Conductor.QueryArticles(timeFrom, timeTo);
-        return Ok(ret);
+        return Ok(from article in ret select SerializableArticle.From(article));
     }
     
     [HttpGet("article/tag")]

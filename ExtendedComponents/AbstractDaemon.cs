@@ -24,9 +24,7 @@ public abstract class AbstractDaemon : IDisposable, IDaemon
 
     public virtual void CloseDaemon()
     {
-        _terminated = true;
-        _iterationThread.Join();
-        _commandQueue.Flush();
+        Dispose();
     }
     
     protected virtual void CancelServerLoopInternal() {  }

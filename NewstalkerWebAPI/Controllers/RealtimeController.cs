@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NewstalkerExtendedComponents;
 using NewstalkerPostgresGrader;
 using NewstalkerWebAPI.Authority;
 using NewstalkerWebAPI.Schemas;
@@ -11,8 +12,8 @@ namespace NewstalkerWebAPI.Controllers;
 [Authorize(AuthenticationSchemes = ApiKeyAuthenticationOptions.DefaultScheme)]
 public class RealtimeController : ControllerBase
 {
-    private static NewstalkerPostgresConductor Conductor
-        => ((NewstalkerPostgresConductor)NewstalkerCore.NewstalkerCore.ActiveDaemon.Get("conductor")!)!;
+    private static INewstalkerConductor Conductor
+        => ((INewstalkerConductor)NewstalkerCore.NewstalkerCore.ActiveDaemon.Get("conductor")!)!;
     
     [HttpGet("test")]
     public IActionResult Test()
